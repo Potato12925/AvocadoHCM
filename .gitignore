@@ -1,0 +1,113 @@
+# ========================
+# 🌐 GLOBAL SETTINGS
+# ========================
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ========================
+# 🐍 FASTAPI / PYTHON BACKEND
+# ========================
+
+# Byte-compiled / optimized / DLL files
+backend/__pycache__/
+backend/**/*.py[cod]
+*$py.class
+
+# Distribution / packaging
+backend/build/
+backend/dist/
+backend/*.egg-info/
+backend/.eggs/
+backend/MANIFEST
+
+# Virtual environments
+backend/venv/
+backend/.venv/
+backend/env/
+backend/.env
+backend/ENV/
+backend/env.bak/
+
+# Cache / coverage / test
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.coverage
+backend/htmlcov/
+backend/.tox/
+backend/nosetests.xml
+backend/coverage.xml
+
+# Database / cache
+backend/*.db
+backend/*.sqlite3
+backend/.cache/
+backend/__pypackages__/
+
+# Google credentials / API keys
+backend/service_account.json
+backend/credentials.json
+
+# ========================
+# ⚙️ VUE 3 / VITE FRONTEND
+# ========================
+
+# Dependencies
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+frontend/dist-ssr/
+frontend/.local
+
+# Environment variables
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.production.local
+frontend/.env.test.local
+
+# Editor directories
+frontend/.vscode/
+frontend/.idea/
+
+# ========================
+# 🔒 COMMON ENV & SECRETS
+# ========================
+
+# Env files ở root (nếu có)
+.env
+.env.local
+.env.*.local
+.envrc
+
+# API keys, credentials
+*.pem
+*.key
+*.crt
+*.json
+
+# ========================
+# 📦 OPTIONAL LOCK FILES
+# ========================
+# Chỉ giữ 1 loại lock file bạn đang dùng, xóa comment dòng tương ứng
+# yarn.lock
+# package-lock.json
+# pnpm-lock.yaml
