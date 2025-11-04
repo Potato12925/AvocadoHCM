@@ -193,6 +193,132 @@
         </table>
       </div>
     </div>
+
+    <!-- Edit Modal -->
+    <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>Chỉnh Sửa Lô Hàng</h2>
+          <button @click="closeEditModal" class="btn-close">✕</button>
+        </div>
+
+        <form @submit.prevent="submitEdit" class="edit-form">
+          <div class="form-group">
+            <label for="edit-barcode">Mã Barcode</label>
+            <input
+              v-model="editForm.barcode"
+              type="text"
+              id="edit-barcode"
+              placeholder="Nhập hoặc quét barcode"
+              class="input-field"
+            />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-brand">Thương Hiệu</label>
+              <input
+                v-model="editForm.brand"
+                type="text"
+                id="edit-brand"
+                placeholder="Brand"
+                class="input-field"
+              />
+            </div>
+            <div class="form-group">
+              <label for="edit-name">Tên Sản Phẩm</label>
+              <input
+                v-model="editForm.name"
+                type="text"
+                id="edit-name"
+                placeholder="Tên sản phẩm"
+                class="input-field"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-category">Danh Mục</label>
+              <input
+                v-model="editForm.category"
+                type="text"
+                id="edit-category"
+                placeholder="Danh mục"
+                class="input-field"
+              />
+            </div>
+            <div class="form-group">
+              <label for="edit-qty">Số Lượng Nhập</label>
+              <input
+                v-model.number="editForm.qty_in"
+                type="number"
+                id="edit-qty"
+                placeholder="0"
+                min="1"
+                class="input-field"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-unitCost">Giá Vốn (₫)</label>
+              <input
+                v-model.number="editForm.unit_cost"
+                type="number"
+                id="edit-unitCost"
+                placeholder="0"
+                min="0"
+                step="0.01"
+                class="input-field"
+              />
+            </div>
+            <div class="form-group">
+              <label for="edit-breakEven">Giá Hòa Vốn (₫)</label>
+              <input
+                v-model.number="editForm.break_even_price"
+                type="number"
+                id="edit-breakEven"
+                placeholder="0"
+                min="0"
+                step="0.01"
+                class="input-field"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-importDate">Ngày Nhập</label>
+              <input
+                v-model="editForm.import_date"
+                type="date"
+                id="edit-importDate"
+                class="input-field"
+              />
+            </div>
+            <div class="form-group">
+              <label for="edit-note">Ghi Chú</label>
+              <input
+                v-model="editForm.note"
+                type="text"
+                id="edit-note"
+                placeholder="Ghi chú..."
+                class="input-field"
+              />
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" @click="closeEditModal" class="btn-cancel">Hủy</button>
+            <button type="submit" class="btn-submit" :disabled="loading">
+              {{ loading ? 'Đang lưu...' : '✓ Cập Nhật' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
