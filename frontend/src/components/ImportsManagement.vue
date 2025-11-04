@@ -342,6 +342,19 @@ const imports = ref([]);
 const loading = ref(false);
 const message = ref(null);
 const searchQuery = ref('');
+const showEditModal = ref(false);
+const editingRowIndex = ref(null);
+const editForm = ref({
+  barcode: '',
+  brand: '',
+  name: '',
+  category: '',
+  qty_in: 1,
+  unit_cost: 0,
+  break_even_price: 0,
+  import_date: new Date().toISOString().split('T')[0],
+  note: '',
+});
 
 const filteredImports = computed(() => {
   return imports.value.filter((item) => {
