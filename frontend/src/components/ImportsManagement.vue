@@ -366,13 +366,114 @@ const filteredImports = computed(() => {
   });
 });
 
+function generateSampleData() {
+  const sampleProducts = [
+    {
+      productID: 'PROD001',
+      barcode: '8936026800001',
+      brand: 'SK-II',
+      name: 'Facial Treatment Essence',
+      category: 'Essence',
+      qty_in: 20,
+      unit_cost: 450000,
+      break_even_price: 520000,
+      import_date: '15/01/2025',
+      note: 'Hàng mẫu - dùng để test',
+      qty_sold: 5,
+      available_qty: 15,
+      created_at: '2025-01-15 10:00:00',
+    },
+    {
+      productID: 'PROD002',
+      barcode: '8936026800002',
+      brand: 'Laneige',
+      name: 'Water Sleeping Mask',
+      category: 'Mặt Nạ',
+      qty_in: 15,
+      unit_cost: 320000,
+      break_even_price: 380000,
+      import_date: '14/01/2025',
+      note: 'Hàng mẫu - dùng để test',
+      qty_sold: 3,
+      available_qty: 12,
+      created_at: '2025-01-14 14:30:00',
+    },
+    {
+      productID: 'PROD003',
+      barcode: '8936026800003',
+      brand: 'Etude House',
+      name: 'Soon Jung Toner',
+      category: 'Nước Hoa Hồng',
+      qty_in: 30,
+      unit_cost: 180000,
+      break_even_price: 220000,
+      import_date: '13/01/2025',
+      note: 'Hàng mẫu - dùng để test',
+      qty_sold: 8,
+      available_qty: 22,
+      created_at: '2025-01-13 09:15:00',
+    },
+    {
+      productID: 'PROD004',
+      barcode: '8936026800004',
+      brand: 'Innisfree',
+      name: 'Green Tea Seed Serum',
+      category: 'Serum',
+      qty_in: 25,
+      unit_cost: 220000,
+      break_even_price: 280000,
+      import_date: '12/01/2025',
+      note: 'Hàng mẫu - dùng để test',
+      qty_sold: 0,
+      available_qty: 25,
+      created_at: '2025-01-12 11:45:00',
+    },
+    {
+      productID: 'PROD005',
+      barcode: '8936026800005',
+      brand: 'The Ordinary',
+      name: 'Hyaluronic Acid 2%',
+      category: 'Serum',
+      qty_in: 40,
+      unit_cost: 120000,
+      break_even_price: 150000,
+      import_date: '11/01/2025',
+      note: 'Hàng mẫu - dùng để test',
+      qty_sold: 12,
+      available_qty: 28,
+      created_at: '2025-01-11 16:20:00',
+    },
+  ];
+
+  return sampleProducts.map((p) => [
+    p.productID,
+    p.barcode,
+    p.brand,
+    p.name,
+    p.category,
+    String(p.qty_in),
+    String(p.unit_cost),
+    String(p.break_even_price),
+    p.import_date,
+    p.note,
+    String(p.qty_sold),
+    String(p.available_qty),
+    p.created_at,
+  ]);
+}
+
 async function loadImports() {
   loading.value = true;
   try {
     const result = await importsAPI.getAll();
     imports.value = result.data || [];
+    if (imports.value.length === 0) {
+      showMessage('Không có dữ liệu từ server, đang hiển thị dữ liệu mẫu', 'info');
+      imports.value = generateSampleData();
+    }
   } catch (error) {
-    showMessage('Lỗi tải dữ liệu', 'error');
+    showMessage('Không thể kết nối API, đang hiển thị dữ liệu mẫu', 'info');
+    imports.value = generateSampleData();
   } finally {
     loading.value = false;
   }
