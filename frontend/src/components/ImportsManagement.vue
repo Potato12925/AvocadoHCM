@@ -409,6 +409,90 @@ async function submitForm() {
   }
 }
 
+function openEditModal(idx) {
+  editingRowIndex.value = idx;
+  const item = filteredImports.value[idx];
+  editForm.value = {
+    barcode: item[1],
+    brand: item[2],
+    name: item[3],
+    category: item[4],
+    qty_in: parseInt(item[5]) || 1,
+    unit_cost: parseFloat(item[6]) || 0,
+    break_even_price: parseFloat(item[7]) || 0,
+    import_date: item[8] || new Date().toISOString().split('T')[0],
+    note: item[9] || '',
+  };
+  showEditModal.value = true;
+}
+
+function closeEditModal() {
+  showEditModal.value = false;
+  editingRowIndex.value = null;
+  editForm.value = {
+    barcode: '',
+    brand: '',
+    name: '',
+    category: '',
+    qty_in: 1,
+    unit_cost: 0,
+    break_even_price: 0,
+    import_date: new Date().toISOString().split('T')[0],
+    note: '',
+  };
+}
+
+async function submitEdit() {
+  if (!editForm.value.barcode.trim()) {
+    showMessage('Vui lòng nhập barcode', 'error');
+    return;
+  }
+  if (!editForm.value.brand.trim()) {
+    showMessage('Vui lòng nhập brand', 'error');
+    return;
+  }
+  if (!editForm.value.name.trim()) {
+    showMessage('Vui lòng nhập tên sản phẩm', 'error');
+    return;
+  }
+  if (!editForm.value.category.trim()) {
+    showMessage('Vui lòng nhập danh mục', 'error');
+    return;
+  }
+
+  loading.value = true;
+  try {
+    const idx = editingRowIndex.value;
+    const actualRow = idx + 2;
+
+    const updates = [
+      {
+        row: actualRow,
+        data: {
+          barcode: editForm.value.barcode,
+          brand: editForm.value.brand,
+          name: editForm.value.name,
+          category: editForm.value.category,
+          qty_in: editForm.value.qty_in,
+          unit_cost: editForm.value.unit_cost,
+          break_even_price: editForm.value.break_even_price,
+          import_date: editForm.value.import_date,
+          note: editForm.value.note,
+        },
+      },
+    ];
+
+    await importsAPI.updateRows(updates);
+    showMessage('Cập nhật thành công!', 'success');
+    closeEditModal();
+    await loadImports();
+  } catch (error) {
+    showMessage('Lỗi cập nhật: ' + error.message, 'error');
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function deleteImport(idx) {
   if (!confirm('Bạn chắc chắn muốn xóa?')) return;
   loading.value = true;
