@@ -1,26 +1,29 @@
 from fastapi import APIRouter, HTTPException
 from app.models.sheets import Sheets
 from pydantic import BaseModel
-from typing import Optional, Any, Dict
+from typing import Optional
 
-router = APIRouter(prefix="/orders", tags=["Đơn hàng"])
+router = APIRouter(prefix="/sold", tags=["Đã bán"])
 
-class OrderItem(BaseModel):
+class SoldItem(BaseModel):
     orderID: str
-    customer_name: str
-    order_code: str
-    package_date: str
+    productID: str
+    barcode: str
+    brand: str
+    name: str
+    category: str
+    qty_sold: int
+    unit_cost: float
     total_cost: float
-    note: Optional[str] = ""
 
 @router.get("/")
-def get_orders():
-    return {"message": "Danh sách đơn hàng"}
+def get_sold():
+    return {"message": "Danh sách sản phẩm đã bán"}
 
 @router.post("/get")
-def get_orders_list():
+def get_sold_items():
     try:
-        ws = Sheets.orders()
+        ws = Sheets.sold()
         values = ws.get_all_values()
 
         # Bỏ dòng tiêu đề (dòng đầu tiên)
@@ -35,20 +38,23 @@ def get_orders_list():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/")
-def create_order(item: OrderItem):
+def create_sold_item(item: SoldItem):
     try:
-        ws = Sheets.orders()
+        ws = Sheets.sold()
         row = [
             item.orderID,
-            item.customer_name,
-            item.order_code,
-            item.package_date,
-            str(item.total_cost),
-            item.note or ""
+            item.productID,
+            item.barcode,
+            item.brand,
+            item.name,
+            item.category,
+            str(item.qty_sold),
+            str(item.unit_cost),
+            str(item.total_cost)
         ]
         ws.append_row(row, value_input_option="USER_ENTERED")
         return {
-            "message": "✅ Đã tạo đơn hàng",
+            "message": "✅ Đã ghi sản phẩm đã bán",
             "orderID": item.orderID
         }
     except Exception as e:
