@@ -740,6 +740,12 @@ label {
   border: 1px solid #fecaca;
 }
 
+.message.info {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
 .table-section {
   background: white;
   border-radius: 12px;
