@@ -185,6 +185,7 @@
               <td>{{ item[8] }}</td>
               <td>{{ item[9] }}</td>
               <td>
+                <button @click="openEditModal(idx)" class="btn-edit">✏️</button>
                 <button @click="deleteImport(idx)" class="btn-delete">🗑</button>
               </td>
             </tr>
