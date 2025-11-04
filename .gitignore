@@ -102,7 +102,6 @@ frontend/.idea/
 *.pem
 *.key
 *.crt
-*.json
 
 # ========================
 # 📦 OPTIONAL LOCK FILES
