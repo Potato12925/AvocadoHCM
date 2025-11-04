@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8001';
+const API_BASE_URL = 'http://localhost:8000';
 
 // ============= IMPORTS API =============
 export const importsAPI = {
@@ -42,11 +42,17 @@ export const importsAPI = {
 // ============= PRODUCTS API =============
 export const productsAPI = {
   async getAll() {
-    const response = await fetch(`${API_BASE_URL}/products/get`, {
+    const response = await fetch(`${API_BASE_URL}/products/`);
+    if (!response.ok) throw new Error('Failed to fetch products');
+    return response.json();
+  },
+  async create(data) {
+    const response = await fetch(`${API_BASE_URL}/products/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to fetch products');
+    if (!response.ok) throw new Error('Failed to create product');
     return response.json();
   },
 };
