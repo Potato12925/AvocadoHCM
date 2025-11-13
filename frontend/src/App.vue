@@ -105,7 +105,7 @@ body,
 
 .app-nav {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   padding: 12px 16px;
   background: white;
