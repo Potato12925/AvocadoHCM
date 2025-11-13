@@ -149,6 +149,73 @@
         {{ message.text }}
       </div>
     </div>
+
+    <div class="history-section">
+      <div class="history-header">
+        <h2 class="section-title">📜 Lịch Sử Đơn Hàng</h2>
+        <button
+          type="button"
+          class="btn-refresh"
+          @click="loadOrderHistory"
+          :disabled="historyLoading"
+        >
+          {{ historyLoading ? 'Đang tải...' : '⟳ Tải lại' }}
+        </button>
+      </div>
+
+      <div v-if="historyLoading" class="history-empty">Đang tải dữ liệu đơn hàng...</div>
+      <div v-else-if="orderHistory.length === 0" class="history-empty">
+        Chưa có đơn hàng nào được tạo.
+      </div>
+      <div v-else class="history-list">
+        <div class="history-card" v-for="order in orderHistory" :key="order.orderID">
+          <div class="history-card-main">
+            <div class="history-card-info">
+              <div class="history-order-code">{{ order.order_code || '(Không mã)' }}</div>
+              <div class="history-info-row">
+                <span>Khách: <strong>{{ order.customer_name || 'N/A' }}</strong></span>
+                <span>Ngày đóng gói: {{ order.package_date }}</span>
+                <span>Tổng chi phí: {{ formatNumber(order.total_cost) }}₫</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="btn-toggle"
+              @click="toggleOrderDetails(order.orderID)"
+            >
+              {{ isOrderExpanded(order.orderID) ? 'Thu gọn' : 'Xem sản phẩm' }}
+            </button>
+          </div>
+
+          <transition name="fade">
+            <div v-if="isOrderExpanded(order.orderID)" class="history-details">
+              <div v-if="orderProducts(order.orderID).length === 0" class="history-empty-products">
+                Chưa có sản phẩm nào được ghi lại cho đơn này.
+              </div>
+              <div v-else class="history-products">
+                <div
+                  class="history-product"
+                  v-for="item in orderProducts(order.orderID)"
+                  :key="`${order.orderID}-${item.productID}-${item.barcode}`"
+                >
+                  <div class="history-product-main">
+                    <div class="history-product-name">{{ item.name }}</div>
+                    <div class="history-product-meta">
+                      Barcode: {{ item.barcode }} | Thương hiệu: {{ item.brand }} | Danh mục:
+                      {{ item.category }}
+                    </div>
+                  </div>
+                  <div class="history-product-qty">
+                    {{ item.qty_sold }} × {{ formatNumber(item.unit_cost) }}₫
+                  </div>
+                  <div class="history-product-total">{{ formatNumber(item.total_cost) }}₫</div>
+                </div>
+              </div>
+            </div>
+          </transition>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -168,6 +235,10 @@ const cartItems = ref([]);
 const imports = ref([]);
 const loading = ref(false);
 const message = ref(null);
+const orderHistory = ref([]);
+const soldHistory = ref([]);
+const historyLoading = ref(false);
+const expandedOrders = ref(new Set());
 
 function itemTotalCost(item) {
   if (!item || !Array.isArray(item.allocations)) return 0;
@@ -187,6 +258,96 @@ async function loadImports() {
   }
 }
 
+async function loadOrderHistory() {
+  historyLoading.value = true;
+  try {
+    const [ordersRes, soldRes] = await Promise.all([ordersAPI.getAll(), soldAPI.getAll()]);
+    const ordersData = ordersRes?.data || [];
+    const soldData = soldRes?.data || [];
+
+    orderHistory.value = ordersData
+      .map((row) => ({
+        orderID: row?.[0] || '',
+        customer_name: row?.[1] || '',
+        order_code: row?.[2] || '',
+        package_date: row?.[3] || '',
+        total_cost: Number(row?.[4]) || 0,
+        note: row?.[5] || '',
+      }))
+      .sort((a, b) => {
+        const dateA = Date.parse(a.package_date) || 0;
+        const dateB = Date.parse(b.package_date) || 0;
+        return dateB - dateA;
+      });
+
+    soldHistory.value = soldData.map((row) => ({
+      orderID: row?.[0] || '',
+      productID: row?.[1] || '',
+      barcode: row?.[2] || '',
+      brand: row?.[3] || '',
+      name: row?.[4] || '',
+      category: row?.[5] || '',
+      qty_sold: Number(row?.[6]) || 0,
+      unit_cost: Number(row?.[7]) || 0,
+      total_cost: Number(row?.[8]) || 0,
+    }));
+
+    expandedOrders.value = new Set();
+  } catch (error) {
+    console.error('Error loading order history:', error);
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+const orderItemsMap = computed(() => {
+  const map = {};
+  for (const item of soldHistory.value || []) {
+    if (!item.orderID) continue;
+    if (!map[item.orderID]) map[item.orderID] = [];
+    map[item.orderID].push(item);
+  }
+  return map;
+});
+
+function orderProducts(orderID) {
+  return orderItemsMap.value[orderID] || [];
+}
+
+function toggleOrderDetails(orderID) {
+  const next = new Set(expandedOrders.value);
+  if (next.has(orderID)) {
+    next.delete(orderID);
+  } else {
+    next.add(orderID);
+  }
+  expandedOrders.value = next;
+}
+
+function isOrderExpanded(orderID) {
+  return expandedOrders.value.has(orderID);
+}
+
+function parseImportDate(value) {
+  if (value === null || value === undefined) return Number.POSITIVE_INFINITY;
+  const raw = String(value).trim();
+  if (!raw) return Number.POSITIVE_INFINITY;
+
+  const direct = Date.parse(raw);
+  if (!Number.isNaN(direct)) return direct;
+
+  const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const year = parseInt(match[3].length === 2 ? `20${match[3]}` : match[3], 10);
+    const dt = new Date(year, month, day);
+    if (!Number.isNaN(dt.getTime())) return dt.getTime();
+  }
+
+  return Number.POSITIVE_INFINITY;
+}
+
 function getBatchesForBarcode(barcode) {
   const batches = [];
   for (const row of imports.value || []) {
@@ -194,10 +355,16 @@ function getBatchesForBarcode(barcode) {
     const available = parseInt(row?.[11]) || 0;
     const unitCost = Number(row?.[6]) || 0;
     const productID = row?.[0];
-    batches.push({ row, productID, unitCost, available });
+    const importDate = parseImportDate(row?.[8]);
+    batches.push({ row, productID, unitCost, available, importDate });
   }
-  // Sort by unit cost desc (highest first)
-  batches.sort((a, b) => b.unitCost - a.unitCost);
+  // Sort by import date asc (FIFO). Invalid dates are pushed to the end.
+  batches.sort((a, b) => {
+    if (a.importDate === b.importDate) return 0;
+    if (a.importDate === Number.POSITIVE_INFINITY) return 1;
+    if (b.importDate === Number.POSITIVE_INFINITY) return -1;
+    return a.importDate - b.importDate;
+  });
   return batches;
 }
 
@@ -366,6 +533,7 @@ async function submitOrder() {
       package_date: new Date().toISOString().split('T')[0],
     };
     cartItems.value = [];
+    await loadOrderHistory();
   } catch (error) {
     showMessage('Lỗi: ' + error.message, 'error');
   } finally {
@@ -386,6 +554,7 @@ function formatNumber(num) {
 
 onMounted(() => {
   loadImports();
+  loadOrderHistory();
 });
 </script>
 
@@ -727,6 +896,165 @@ label {
   border: 1px solid #fecaca;
 }
 
+.history-section {
+  margin-top: 24px;
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.btn-refresh {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+  background: #eef2ff;
+  color: #3730a3;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-refresh:not(:disabled):hover {
+  background: #dbe4ff;
+}
+
+.history-empty {
+  padding: 24px;
+  text-align: center;
+  color: #6b7280;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  background: #fdfdfc;
+}
+
+.history-card-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.history-card-info {
+  flex: 1;
+}
+
+.history-order-code {
+  font-size: 18px;
+  font-weight: 700;
+  color: #14532d;
+}
+
+.history-info-row {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #4b5563;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.btn-toggle {
+  border: none;
+  background: #86c06b;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-toggle:hover {
+  background: #6db046;
+}
+
+.history-details {
+  margin-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+}
+
+.history-products {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-product {
+  display: grid;
+  grid-template-columns: 2fr 1fr 100px;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.history-product-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.history-product-meta {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.history-product-qty,
+.history-product-total {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.history-empty-products {
+  padding: 12px;
+  background: #fef3c7;
+  border: 1px dashed #fcd34d;
+  color: #92400e;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
 @media (max-width: 768px) {
   .form-row {
     grid-template-columns: 1fr;
@@ -743,6 +1071,20 @@ label {
 
   .item-total {
     text-align: left;
+  }
+
+  .history-card-main {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .history-product {
+    grid-template-columns: 1fr;
+  }
+
+  .history-info-row {
+    flex-direction: column;
+    gap: 6px;
   }
 }
 

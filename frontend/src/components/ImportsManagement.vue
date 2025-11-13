@@ -144,7 +144,7 @@
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="form- ">
           <button type="submit" class="btn-submit" :disabled="loading">
             {{ loading ? 'Đang lưu...' : '✓ Thêm Lô Hàng' }}
           </button>
