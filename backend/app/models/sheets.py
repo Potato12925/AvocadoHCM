@@ -90,6 +90,10 @@ class Sheets:
         return _get_ws("Sold")
 
     @staticmethod
+    def expenses() -> gspread.Worksheet:
+        return _get_ws("Expenses")
+
+    @staticmethod
     def ping() -> dict:
         """Kiểm tra kết nối nhanh: trả tên file + tên sheet đầu + số sheet."""
         _connect_if_needed()
