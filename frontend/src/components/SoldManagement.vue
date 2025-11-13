@@ -180,7 +180,7 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
   color: #2d5016;
   margin-bottom: 24px;
@@ -195,7 +195,7 @@ onMounted(() => {
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: #2d5016;
   margin-bottom: 16px;
@@ -213,7 +213,7 @@ onMounted(() => {
   background: #f3f4f6;
   border: 1px solid #ddd;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -239,7 +239,7 @@ onMounted(() => {
 }
 
 .filter-group label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: #555;
 }
@@ -248,7 +248,7 @@ onMounted(() => {
   padding: 8px 10px;
   border: 1px solid #ddd;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 15px;
   font-family: inherit;
   transition: border-color 0.2s;
 }
@@ -265,7 +265,7 @@ onMounted(() => {
   background: #f3f4f6;
   border: 1px solid #ddd;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -279,7 +279,7 @@ onMounted(() => {
   padding: 32px;
   text-align: center;
   color: #999;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .table-wrapper {
@@ -292,7 +292,7 @@ onMounted(() => {
 .sold-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .sold-table thead {
@@ -346,7 +346,7 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 16px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #2d5016;
   margin-bottom: 8px;

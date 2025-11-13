@@ -55,6 +55,24 @@ export const productsAPI = {
     if (!response.ok) throw new Error('Failed to create product');
     return response.json();
   },
+  async updateRows(updates) {
+    const response = await fetch(`${API_BASE_URL}/products/rows/update`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    });
+    if (!response.ok) throw new Error('Failed to update products');
+    return response.json();
+  },
+  async deleteRows(rows) {
+    const response = await fetch(`${API_BASE_URL}/products/rows/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    });
+    if (!response.ok) throw new Error('Failed to delete products');
+    return response.json();
+  },
 };
 
 // ============= ORDERS API =============

@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.imports import DeleteRowsRequest, UpdateRowsRequest
 from app.services.product_services import (
     list_products_raw,
+    list_products_view,
     create_product_row,
     delete_product_rows_by_indices,
     update_product_rows_bulk,
@@ -13,10 +14,10 @@ from app.services.product_services import (
 router = APIRouter(prefix="/products", tags=["Sản phẩm"])
 
 
-@router.get("/", summary="Lấy danh sách sản phẩm (raw)")
+@router.get("/", summary="Lấy danh sách sản phẩm (barcode, brand, name, category, đã đăng)")
 def get_products():
     try:
-        return list_products_raw()
+        return list_products_view()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

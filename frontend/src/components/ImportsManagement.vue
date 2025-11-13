@@ -216,7 +216,7 @@
               <td>{{ item[9] }}</td>
               <td>
                 <button @click="openEditModal(item)" class="btn-refresh">✏️</button>
-                <button @click="deleteImport(item)" class="btn-delete">🗑</button>
+                <button @click="deleteImport(item)" class="btn-delete">X</button>
               </td>
             </tr>
           </tbody>
@@ -633,7 +633,8 @@ onMounted(() => {
 <style scoped>
 .imports-container {
   width: 100%;
-  max-width: 1200px;
+  /* widen to use more horizontal space */
+  max-width: 1600px;
   margin: 0 auto;
   padding: 16px;
   background: #fafaf9;
@@ -641,7 +642,7 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
   color: #2d5016;
   margin-bottom: 24px;
@@ -657,7 +658,7 @@ onMounted(() => {
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: #2d5016;
   margin-bottom: 16px;
@@ -682,7 +683,7 @@ onMounted(() => {
 }
 
 label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: #555;
 }
@@ -691,7 +692,7 @@ label {
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   transition: border-color 0.2s;
 }
@@ -708,7 +709,7 @@ label {
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
@@ -737,7 +738,7 @@ label {
   color: #374151;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
@@ -762,7 +763,7 @@ label {
 }
 
 .suggestions-title {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
   padding: 6px 8px;
   border-bottom: 1px solid #f3f4f6;
@@ -787,7 +788,7 @@ label {
 }
 
 .s-badge {
-  font-size: 12px;
+  font-size: 13px;
   color: #065f46;
   background: #d1fae5;
   border: 1px solid #a7f3d0;
@@ -796,11 +797,11 @@ label {
 }
 
 .s-name {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .suggestion-meta {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
 }
 
@@ -808,7 +809,7 @@ label {
   padding: 12px 16px;
   border-radius: 8px;
   margin-top: 12px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
 }
 
@@ -839,11 +840,11 @@ label {
 }
 
 .btn-refresh {
-  padding: 8px 12px;
+  padding: 8px 15px;
   background: #f3f4f6;
   border: 1px solid #ddd;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -861,7 +862,7 @@ label {
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
 }
 
@@ -876,7 +877,7 @@ label {
   padding: 32px;
   text-align: center;
   color: #999;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .table-wrapper {
@@ -888,7 +889,7 @@ label {
 .imports-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .imports-table thead {
@@ -916,12 +917,13 @@ label {
 }
 
 .btn-delete {
-  padding: 4px 8px;
+  padding: 8px 20px;
+  margin-left: 10px;
   background: #fee2e2;
   border: 1px solid #fecaca;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   transition: all 0.2s;
 }
 
@@ -996,7 +998,7 @@ label {
   border: 1px solid #eee;
   border-radius: 8px;
   color: #555;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 @media (max-width: 640px) {
@@ -1008,18 +1010,33 @@ label {
     grid-template-columns: 1fr;
   }
 
+  /* stack modal fields and ensure full width on mobile */
+  .modal {
+    max-width: 100%;
+  }
+  .modal-row {
+    grid-template-columns: 1fr;
+  }
+
   .table-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
   .imports-table {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .imports-table th,
   .imports-table td {
     padding: 8px 6px;
+  }
+}
+
+/* on wide screens, stretch container near full device width */
+@media (min-width: 1440px) {
+  .imports-container {
+    max-width: 96vw;
   }
 }
 </style>

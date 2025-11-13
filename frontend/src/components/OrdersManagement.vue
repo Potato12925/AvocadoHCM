@@ -5,7 +5,7 @@
     <!-- Form Tạo Đơn Hàng -->
     <div class="form-section">
       <h2 class="section-title">Thông Tin Đơn Hàng</h2>
-      <form @submit.prevent="submitOrder" class="order-form">
+      <form @submit.prevent="submitOrder" @keydown.enter.prevent class="order-form">
         <div class="form-row">
           <div class="form-group">
             <label for="customerName">Tên Khách Hàng</label>
@@ -14,7 +14,6 @@
               type="text"
               id="customerName"
               placeholder="Tên khách hàng"
-              required
               class="input-field"
             />
           </div>
@@ -66,7 +65,17 @@
               <div class="item-details">
                 {{ item.barcode }} | {{ item.brand }} | {{ item.category }}
               </div>
-              <div class="item-cost">Giá vốn: {{ formatNumber(item.unit_cost) }}₫</div>
+              <div class="item-available">Tồn: {{ item.available_total }}</div>
+              <div class="item-chips">
+                <span
+                  v-for="al in item.allocations"
+                  :key="al.productID"
+                  class="chip chip-alloc"
+                >
+                  {{ al.qty }} × {{ formatNumber(al.unit_cost) }}₫ (ID {{ al.productID }})
+                </span>
+              </div>
+              <div class="item-cost">Tổng giá vốn: {{ formatNumber(itemTotalCost(item)) }}₫</div>
             </div>
 
             <div class="item-qty">
@@ -82,21 +91,22 @@
                 v-model.number="item.qty_sold"
                 type="number"
                 min="1"
-                :max="item.available_qty"
+                :max="item.available_total"
+                @change="refreshAllocationsForIndex(idx)"
                 class="qty-input"
               />
               <button
                 type="button"
                 @click="increaseQty(idx)"
                 class="btn-qty"
-                :disabled="item.qty_sold >= item.available_qty"
+                :disabled="item.qty_sold >= item.available_total"
               >
                 +
               </button>
             </div>
 
             <div class="item-total">
-              {{ formatNumber(item.qty_sold * item.unit_cost) }}₫
+              {{ formatNumber(itemTotalCost(item)) }}₫
             </div>
 
             <button
@@ -159,8 +169,13 @@ const imports = ref([]);
 const loading = ref(false);
 const message = ref(null);
 
+function itemTotalCost(item) {
+  if (!item || !Array.isArray(item.allocations)) return 0;
+  return item.allocations.reduce((s, a) => s + (a.qty || 0) * (a.unit_cost || 0), 0);
+}
+
 const totalCost = computed(() => {
-  return cartItems.value.reduce((sum, item) => sum + item.qty_sold * item.unit_cost, 0);
+  return cartItems.value.reduce((sum, item) => sum + itemTotalCost(item), 0);
 });
 
 async function loadImports() {
@@ -172,59 +187,109 @@ async function loadImports() {
   }
 }
 
+function getBatchesForBarcode(barcode) {
+  const batches = [];
+  for (const row of imports.value || []) {
+    if (String(row?.[1] || '') !== String(barcode)) continue;
+    const available = parseInt(row?.[11]) || 0;
+    const unitCost = Number(row?.[6]) || 0;
+    const productID = row?.[0];
+    batches.push({ row, productID, unitCost, available });
+  }
+  // Sort by unit cost desc (highest first)
+  batches.sort((a, b) => b.unitCost - a.unitCost);
+  return batches;
+}
+
+function computeAllocations(barcode, desiredQty) {
+  const batches = getBatchesForBarcode(barcode);
+  const totalAvailable = batches.reduce((s, b) => s + Math.max(0, b.available), 0);
+  const target = Math.max(0, Math.min(desiredQty, totalAvailable));
+  let remaining = target;
+  const allocations = [];
+  for (const b of batches) {
+    if (remaining <= 0) break;
+    const take = Math.min(b.available, remaining);
+    if (take > 0) {
+      allocations.push({ productID: b.productID, unit_cost: b.unitCost, qty: take });
+      remaining -= take;
+    }
+  }
+  return { allocations, totalAvailable, finalQty: target };
+}
+
 function addProductByBarcode() {
   if (!barcodeInput.value.trim()) return;
 
   const barcode = barcodeInput.value.trim();
-  const matchingBatches = imports.value.filter((item) => item[1] === barcode);
-
-  if (matchingBatches.length === 0) {
+  const batches = getBatchesForBarcode(barcode);
+  if (batches.length === 0) {
     showMessage('Không tìm thấy sản phẩm với mã barcode này', 'error');
     barcodeInput.value = '';
     return;
   }
 
-  // Ưu tiên lô có unit_cost cao nhất (FIFO ngược)
-  matchingBatches.sort((a, b) => parseFloat(b[6]) - parseFloat(a[6]));
-  const batch = matchingBatches[0];
+  const totalAvailable = batches.reduce((s, b) => s + Math.max(0, b.available), 0);
+  if (totalAvailable <= 0) {
+    showMessage('Sản phẩm đã hết hàng', 'error');
+    barcodeInput.value = '';
+    return;
+  }
 
-  // Kiểm tra xem sản phẩm đã có trong giỏ chưa
-  const existingIdx = cartItems.value.findIndex((item) => item.productID === batch[0]);
-  if (existingIdx > -1) {
-    // Tăng số lượng nếu có sẵn
-    const maxAvailable =
-      parseInt(batch[11]) - cartItems.value[existingIdx].qty_sold + cartItems.value[existingIdx].qty_sold;
-    if (cartItems.value[existingIdx].qty_sold < maxAvailable) {
-      cartItems.value[existingIdx].qty_sold += 1;
-    } else {
-      showMessage('Số lượng không đủ', 'error');
-    }
-  } else {
-    // Thêm sản phẩm mới vào giỏ
+  const existingIdx = cartItems.value.findIndex((ci) => String(ci.barcode) === barcode);
+  if (existingIdx === -1) {
+    const top = batches[0];
+    const brand = top?.row?.[2] || '';
+    const name = top?.row?.[3] || '';
+    const category = top?.row?.[4] || '';
+    // Start with qty 1
+    const { allocations, totalAvailable: avail, finalQty } = computeAllocations(barcode, 1);
     cartItems.value.push({
-      productID: batch[0],
-      barcode: batch[1],
-      brand: batch[2],
-      name: batch[3],
-      category: batch[4],
-      qty_sold: 1,
-      unit_cost: parseFloat(batch[6]),
-      available_qty: parseInt(batch[11]),
+      barcode,
+      brand,
+      name,
+      category,
+      qty_sold: finalQty,
+      available_total: avail,
+      allocations,
     });
+  } else {
+    const current = cartItems.value[existingIdx];
+    const desired = Math.min((current.qty_sold || 0) + 1, totalAvailable);
+    const { allocations, totalAvailable: avail, finalQty } = computeAllocations(barcode, desired);
+    current.qty_sold = finalQty;
+    current.available_total = avail;
+    current.allocations = allocations;
   }
 
   barcodeInput.value = '';
 }
 
+function refreshAllocationsForIndex(idx) {
+  const item = cartItems.value[idx];
+  if (!item) return;
+  const desired = Math.max(1, Number(item.qty_sold || 1));
+  const { allocations, totalAvailable, finalQty } = computeAllocations(item.barcode, desired);
+  item.available_total = totalAvailable;
+  item.qty_sold = finalQty;
+  item.allocations = allocations;
+}
+
 function increaseQty(idx) {
-  if (cartItems.value[idx].qty_sold < cartItems.value[idx].available_qty) {
-    cartItems.value[idx].qty_sold += 1;
+  const item = cartItems.value[idx];
+  if (!item) return;
+  if ((item.qty_sold || 0) < (item.available_total || 0)) {
+    item.qty_sold = (item.qty_sold || 0) + 1;
+    refreshAllocationsForIndex(idx);
   }
 }
 
 function decreaseQty(idx) {
-  if (cartItems.value[idx].qty_sold > 1) {
-    cartItems.value[idx].qty_sold -= 1;
+  const item = cartItems.value[idx];
+  if (!item) return;
+  if ((item.qty_sold || 0) > 1) {
+    item.qty_sold = (item.qty_sold || 0) - 1;
+    refreshAllocationsForIndex(idx);
   }
 }
 
@@ -259,38 +324,34 @@ async function submitOrder() {
       note: '',
     });
 
-    // Ghi chi tiết sản phẩm đã bán
-    for (const item of cartItems.value) {
-      await soldAPI.create({
-        orderID,
-        productID: item.productID,
-        barcode: item.barcode,
-        brand: item.brand,
-        name: item.name,
-        category: item.category,
-        qty_sold: item.qty_sold,
-        unit_cost: item.unit_cost,
-        total_cost: item.qty_sold * item.unit_cost,
-      });
-    }
-
-    // Cập nhật qty_sold và available_qty trong Imports
+    // Ghi chi tiết sản phẩm đã bán theo phân bổ
     const updates = [];
     for (const item of cartItems.value) {
-      const importRowData = imports.value.find((imp) => imp[0] === item.productID);
-      if (importRowData) {
-        const rowIndex = imports.value.indexOf(importRowData) + 2; // 1-based, +1 for header
-        const currentQtySold = parseInt(importRowData[10]) || 0;
-        const newQtySold = currentQtySold + item.qty_sold;
-        const newAvailableQty = parseInt(importRowData[5]) - newQtySold;
-
-        updates.push({
-          row: rowIndex,
-          data: {
-            qty_sold: newQtySold,
-            available_qty: newAvailableQty,
-          },
+      for (const al of item.allocations || []) {
+        if (!al || !al.qty) continue;
+        await soldAPI.create({
+          orderID,
+          productID: al.productID,
+          barcode: item.barcode,
+          brand: item.brand,
+          name: item.name,
+          category: item.category,
+          qty_sold: al.qty,
+          unit_cost: al.unit_cost,
+          total_cost: al.qty * al.unit_cost,
         });
+
+        const importRowData = imports.value.find((imp) => imp[0] === al.productID);
+        if (importRowData) {
+          const rowIndex = imports.value.indexOf(importRowData) + 2; // 1-based, +1 for header
+          const currentQtySold = parseInt(importRowData[10]) || 0;
+          const newQtySold = currentQtySold + al.qty;
+          const newAvailableQty = parseInt(importRowData[5]) - newQtySold;
+          updates.push({
+            row: rowIndex,
+            data: { qty_sold: newQtySold, available_qty: newAvailableQty },
+          });
+        }
       }
     }
 
@@ -339,7 +400,7 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
   color: #2d5016;
   margin-bottom: 24px;
@@ -354,14 +415,14 @@ onMounted(() => {
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: #2d5016;
   margin-bottom: 16px;
 }
 
 .subsection-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   color: #2d5016;
   margin: 20px 0 12px 0;
@@ -388,7 +449,7 @@ onMounted(() => {
 }
 
 label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: #555;
 }
@@ -397,7 +458,7 @@ label {
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   transition: border-color 0.2s;
 }
@@ -412,7 +473,7 @@ label {
   padding: 24px;
   text-align: center;
   color: #999;
-  font-size: 14px;
+  font-size: 15px;
   background: #fafaf9;
   border-radius: 8px;
   border: 1px dashed #ddd;
@@ -448,18 +509,58 @@ label {
 .item-name {
   font-weight: 600;
   color: #2d5016;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .item-details {
-  font-size: 12px;
+  font-size: 13px;
   color: #666;
 }
 
+.item-available {
+  font-size: 13px;
+  color: #374151;
+}
+
 .item-cost {
-  font-size: 12px;
+  font-size: 13px;
   color: #86c06b;
   font-weight: 500;
+}
+
+/* Chips to indicate batch/product and unit cost */
+.item-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+
+.chip-id {
+  background: #eef2ff;
+  color: #3730a3;
+  border-color: #c7d2fe;
+}
+
+.chip-cost {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.chip-alloc {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
 }
 
 .item-qty {
@@ -477,7 +578,7 @@ label {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   transition: all 0.2s;
 }
@@ -496,7 +597,7 @@ label {
   flex: 1;
   border: none;
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   padding: 4px;
 }
@@ -515,7 +616,7 @@ label {
   text-align: right;
   font-weight: 600;
   color: #2d5016;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .btn-remove {
@@ -525,7 +626,7 @@ label {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   transition: all 0.2s;
 }
@@ -544,7 +645,7 @@ label {
   display: flex;
   justify-content: flex-end;
   gap: 16px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #2d5016;
 }
@@ -555,7 +656,7 @@ label {
 
 .summary-value {
   color: #86c06b;
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .form-actions {
@@ -570,7 +671,7 @@ label {
   padding: 12px 16px;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
@@ -610,7 +711,7 @@ label {
   padding: 12px 16px;
   border-radius: 8px;
   margin-top: 12px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
 }
 

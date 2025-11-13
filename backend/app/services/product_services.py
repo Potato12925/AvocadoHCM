@@ -1,10 +1,15 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from app.models.sheets import Sheets
 from app.models.imports import DeleteRowsRequest, UpdateRowsRequest
 
+# Chuẩn cột cho sheet Products (A..E)
+COLS = [
+    "barcode", "hãng", "tên", "phân loại", "đã đăng"
+]
 
-def _get_header_and_values(ws) -> (List[str], List[List[str]]):
+
+def _get_header_and_values(ws) -> Tuple[List[str], List[List[str]]]:
     values = ws.get_all_values()
     header = values[0] if values else []
     data = values[1:] if len(values) > 1 else []
@@ -26,10 +31,84 @@ def _dict_to_row(d: Dict[str, Any], cols: List[str]) -> List[str]:
     return out
 
 
+# Helpers cố định theo COLS của Products
+def _row_to_dict_product(row: List[str]) -> Dict[str, Any]:
+    row = row + [""] * (len(COLS) - len(row))
+    out = {COLS[i]: row[i] for i in range(len(COLS))}
+    out["đã đăng"] = _normalize_published(out.get("đã đăng", ""))
+    return out
+
+
+def _dict_to_row_product(d: Dict[str, Any]) -> List[str]:
+    out: List[str] = []
+    for k in COLS:
+        v = d.get(k, "")
+        if k == "đã đăng":
+            v = _normalize_published(v)
+        if v is None:
+            v = ""
+        out.append(str(v))
+    return out
+
+
 def list_products_raw() -> Dict[str, Any]:
     ws = Sheets.products()
     header, data = _get_header_and_values(ws)
     return {"header": header, "count": len(data), "data": data}
+
+
+def _normalize_published(val: Any) -> str:
+    """Chuẩn hóa cờ 'đã đăng' về '1' hoặc rỗng."""
+    if val is None:
+        return ""
+    s = str(val).strip().lower()
+    if s in ("1", "true", "yes", "y", "đã đăng", "da dang", "published"):
+        return "1"
+    return "1" if s and s not in ("0", "false", "no", "n", "") else ""
+
+
+def list_products_view() -> Dict[str, Any]:
+    """
+    Trả danh sách sản phẩm chỉ với các cột:
+    - barcode, brand, name, category, đã đăng
+
+    'đã đăng' lấy từ cột có tên gần nghĩa ('published', 'đã đăng', 'is_published') nếu tồn tại;
+    nếu không có cột, để rỗng. Giá trị chuẩn hóa: '1' hoặc ''.
+    """
+    ws = Sheets.products()
+    header, data = _get_header_and_values(ws)
+
+    # Ánh xạ tên cột -> index (không phân biệt hoa thường, bỏ khoảng trắng)
+    def norm(h: str) -> str:
+        return (h or "").strip().lower()
+
+    idx = {norm(h): i for i, h in enumerate(header)}
+    idx_barcode = idx.get("barcode", 0)
+    # Hỗ trợ cả tiếng Việt và tiếng Anh cho các cột
+    idx_brand = idx.get("hãng", idx.get("brand", 1))
+    idx_name = idx.get("tên", idx.get("name", 2))
+    idx_category = idx.get("phân loại", idx.get("category", 3))
+
+    # Tìm cột 'published' nếu có
+    idx_published = None
+    for key in ("published", "is_published", "đã đăng", "da dang", "dang"):
+        if key in idx:
+            idx_published = idx[key]
+            break
+
+    out_rows: List[List[str]] = []
+    for r in data:
+        # đảm bảo độ dài đủ
+        row = r + [""] * (max(idx_barcode, idx_brand, idx_name, idx_category, (idx_published or -1)) + 1 - len(r))
+        barcode = row[idx_barcode] if idx_barcode is not None else ""
+        brand = row[idx_brand] if idx_brand is not None else ""
+        name = row[idx_name] if idx_name is not None else ""
+        category = row[idx_category] if idx_category is not None else ""
+        published_raw = row[idx_published] if idx_published is not None else ""
+        published = _normalize_published(published_raw)
+        out_rows.append([barcode, brand, name, category, published])
+
+    return {"header": COLS, "count": len(out_rows), "data": out_rows}
 
 
 def create_product_row(item: Dict[str, Any]) -> Dict[str, Any]:
@@ -115,4 +194,3 @@ def delete_product_rows_by_indices(req: DeleteRowsRequest) -> Dict[str, Any]:
         "invalid_rows": invalid,
         "message": f"Đã xóa {len(deleted)} dòng. Bỏ qua {len(protected)} dòng tiêu đề và {len(invalid)} dòng không hợp lệ."
     }
-
