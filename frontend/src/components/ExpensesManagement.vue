@@ -359,7 +359,7 @@ async function saveEdit() {
       payer: editForm.value.payer,
     };
     await expensesAPI.updateRows([{ row: actualRow, data: payload }]);
-    showMessage('Đã cập nhật chi tiêu', 'success');
+    showMessage('Đ�� cập nhật chi tiêu', 'success');
     closeEditModal();
     await loadExpenses();
   } catch (error) {
@@ -771,6 +771,15 @@ label {
 @media (max-width: 640px) {
   .expenses-container {
     padding: 12px;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+  }
+
+  .filter-group {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .form-row {
