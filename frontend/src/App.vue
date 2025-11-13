@@ -4,6 +4,7 @@ import ImportsManagement from './components/ImportsManagement.vue';
 import ProductsManagement from './components/ProductsManagement.vue';
 import OrdersManagement from './components/OrdersManagement.vue';
 import SoldManagement from './components/SoldManagement.vue';
+import ExpensesManagement from './components/ExpensesManagement.vue';
 
 const currentPage = ref('imports');
 
@@ -12,6 +13,7 @@ const pages = {
   products: { name: 'Sản Phẩm', icon: '📦', component: ProductsManagement },
   orders: { name: 'Tạo Đơn', icon: '🛒', component: OrdersManagement },
   sold: { name: 'Đã Bán', icon: '📊', component: SoldManagement },
+  expenses: { name: 'Chi Tiêu', icon: '💰', component: ExpensesManagement },
 };
 </script>
 
@@ -103,7 +105,7 @@ body,
 
 .app-nav {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   padding: 12px 16px;
   background: white;
