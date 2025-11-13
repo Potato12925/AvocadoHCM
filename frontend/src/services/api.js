@@ -119,6 +119,45 @@ export const soldAPI = {
   },
 };
 
+// ============= EXPENSES API =============
+export const expensesAPI = {
+  async getAll() {
+    const response = await fetch(`${API_BASE_URL}/expenses/`);
+    if (!response.ok) throw new Error('Failed to fetch expenses');
+    return response.json();
+  },
+
+  async create(data) {
+    const response = await fetch(`${API_BASE_URL}/expenses/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to create expense');
+    return response.json();
+  },
+
+  async updateRows(updates) {
+    const response = await fetch(`${API_BASE_URL}/expenses/rows/update`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    });
+    if (!response.ok) throw new Error('Failed to update expenses');
+    return response.json();
+  },
+
+  async deleteRows(rows) {
+    const response = await fetch(`${API_BASE_URL}/expenses/rows/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    });
+    if (!response.ok) throw new Error('Failed to delete expenses');
+    return response.json();
+  },
+};
+
 // ============= UTILITY FUNCTIONS =============
 export function generateUniqueId() {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
