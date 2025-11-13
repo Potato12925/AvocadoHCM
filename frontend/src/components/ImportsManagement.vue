@@ -5,154 +5,139 @@
     <!-- Form Nhập Hàng -->
     <div class="form-section">
       <h2 class="section-title">Thêm Lô Hàng Mới</h2>
-      <form @submit.prevent="submitForm" class="import-form">
+      <div class="import-form" role="form">
         <div class="form-group">
           <label for="barcode">Mã Barcode</label>
-          <input
-            v-model="form.barcode"
-            type="text"
-            id="barcode"
-            placeholder="Nhập hoặc quét barcode"
-            required
-            class="input-field"
-            ref="barcodeInput"
-          />
-          <!-- Gợi ý sản phẩm theo barcode -->
-          <div v-if="barcodeSuggestions.length > 0" class="suggestions">
-            <div class="suggestions-title">Gợi ý sản phẩm trùng barcode:</div>
-            <div
-              v-for="(row, i) in barcodeSuggestions"
-              :key="i"
-              class="suggestion-item"
-              @click="selectSuggestedProduct(row)"
+          <div class="barcode-row">
+            <input
+              v-model="barcodeInputValue"
+              type="text"
+              id="barcode"
+              placeholder="Nhập hoặc quét barcode"
+              class="input-field"
+              ref="barcodeInput"
+              @keyup.enter.prevent="handleBarcodeScan"
+              :disabled="loading"
+            />
+            <button
+              type="button"
+              class="btn-add-barcode"
+              @click="handleBarcodeScan"
+              :disabled="loading || !barcodeInputValue.trim()"
             >
-              <div class="suggestion-line">
-                <span class="s-badge">{{ getCell(row, 'barcode') }}</span>
-                <span class="s-name">{{ getCell(row, 'tên') }}</span>
-              </div>
-              <div class="suggestion-meta">
-                <span>{{ getCell(row, 'hãng') }}</span> ·
-                <span>{{ getCell(row, 'phân loại') }}</span>
-              </div>
-            </div>
+              + Thêm
+            </button>
           </div>
+          <p class="input-hint">
+            Quét liên tiếp mã vạch, hệ thống sẽ tự lấy thông tin sản phẩm và thêm vào danh sách bên dưới.
+          </p>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label for="brand">Thương Hiệu</label>
-            <input
-              v-model="form.brand"
-              type="text"
-              id="brand"
-              placeholder="Brand"
-              required
-              class="input-field"
-              list="brandOptions"
-            />
-            <datalist id="brandOptions">
-              <option v-for="b in uniqueBrands" :key="b" :value="b" />
-            </datalist>
-          </div>
-          <div class="form-group">
-            <label for="name">Tên Sản Phẩm</label>
-            <input
-              v-model="form.name"
-              type="text"
-              id="name"
-              placeholder="Tên sản phẩm"
-              required
-              class="input-field"
-            />
-          </div>
+        <div v-if="pendingItems.length > 0" class="pending-list">
+          <table class="imports-table pending-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Barcode</th>
+                <th>Tên Sản Phẩm</th>
+                <th>Brand</th>
+                <th>Danh Mục</th>
+                <th>Nhập</th>
+                <th>Giá Vốn</th>
+                <th>Hòa Vốn</th>
+                <th>Ngày Nhập</th>
+                <th>Ghi Chú</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, idx) in pendingItems" :key="item.barcode">
+                <td>{{ idx + 1 }}</td>
+                <td>{{ item.barcode }}</td>
+                <td>{{ item.name }}</td>
+                <td>{{ item.brand }}</td>
+                <td>{{ item.category }}</td>
+                <td>
+                  <input
+                    v-model.number="item.qty_in"
+                    type="number"
+                    min="1"
+                    class="input-field inline-input"
+                    :disabled="loading"
+                    @change="ensureMinimumQuantity(item)"
+                  />
+                </td>
+                <td>
+                  <input
+                    v-model.number="item.unit_cost"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="input-field inline-input"
+                    :disabled="loading"
+                    @input="handleUnitCostChange(item)"
+                  />
+                </td>
+                <td>
+                  <input
+                    v-model.number="item.break_even_price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="input-field inline-input"
+                    :disabled="loading"
+                    @input="markCustomBreakEven(item)"
+                  />
+                </td>
+                <td>
+                  <input v-model="item.import_date" type="date" class="input-field inline-input" :disabled="loading" />
+                </td>
+                <td>
+                  <input
+                    v-model="item.note"
+                    type="text"
+                    placeholder="Ghi chú..."
+                    class="input-field inline-input"
+                    :disabled="loading"
+                  />
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="btn-delete"
+                    @click="removePendingItem(item.barcode)"
+                    :disabled="loading"
+                  >
+                    ✕
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="pending-empty">
+          Chưa có sản phẩm trong lô nhập. Quét barcode để bắt đầu.
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label for="category">Danh Mục</label>
-            <input
-              v-model="form.category"
-              type="text"
-              id="category"
-              placeholder="Danh mục"
-              required
-              class="input-field"
-            />
-          </div>
-          <div class="form-group">
-            <label for="qty">Số Lượng Nhập</label>
-            <input
-              v-model.number="form.qty_in"
-              type="number"
-              id="qty"
-              placeholder="0"
-              required
-              min="1"
-              class="input-field"
-            />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="unitCost">Giá Vốn (₫)</label>
-            <input
-              v-model.number="form.unit_cost"
-              type="number"
-              id="unitCost"
-              placeholder="0"
-              required
-              min="0"
-              step="0.01"
-              class="input-field"
-            />
-          </div>
-          <div class="form-group">
-            <label for="breakEven">Giá Hòa Vốn (₫)</label>
-            <input
-              v-model.number="form.break_even_price"
-              type="number"
-              id="breakEven"
-              placeholder="0"
-              min="0"
-              step="0.01"
-              class="input-field"
-              @input="hasCustomBreakEven = true"
-            />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="importDate">Ngày Nhập</label>
-            <input
-              v-model="form.import_date"
-              type="date"
-              id="importDate"
-              class="input-field"
-            />
-          </div>
-          <div class="form-group">
-            <label for="note">Ghi Chú</label>
-            <input
-              v-model="form.note"
-              type="text"
-              id="note"
-              placeholder="Ghi chú..."
-              class="input-field"
-            />
-          </div>
-        </div>
-
-        <div class="form- ">
-          <button type="submit" class="btn-submit" :disabled="loading">
-            {{ loading ? 'Đang lưu...' : '✓ Thêm Lô Hàng' }}
+        <div class="form-actions">
+          <button
+            type="button"
+            class="btn-submit"
+            :disabled="loading || pendingItems.length === 0"
+            @click="submitForm"
+          >
+            {{ loading ? 'Đang lưu...' : '✓ Nhập ' + pendingItems.length + ' sản phẩm' }}
           </button>
-          <button type="button" class="btn-reset" :disabled="loading" @click="resetForm">
+          <button
+            type="button"
+            class="btn-reset"
+            :disabled="loading || pendingItems.length === 0"
+            @click="resetForm"
+          >
             ↺ Reset
           </button>
         </div>
-      </form>
+      </div>
 
       <div v-if="message" :class="['message', message.type]">
         {{ message.text }}
@@ -166,13 +151,22 @@
         <button @click="loadImports" class="btn-refresh">🔄 Làm Mới</button>
       </div>
 
-      <div class="search-bar">
+      <div class="filters-bar">
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Tìm theo barcode, tên sản phẩm..."
           class="search-input"
         />
+        <div class="month-filter">
+          <label for="importMonth">Tháng</label>
+          <input
+            id="importMonth"
+            v-model="selectedMonth"
+            type="month"
+            class="month-input"
+          />
+        </div>
       </div>
 
       <div v-if="loading" class="loading">Đang tải dữ liệu...</div>
@@ -241,21 +235,21 @@
           <div class="modal-row">
             <div class="modal-group">
               <label>Barcode</label>
-              <input v-model="editForm.barcode" class="input-field" />
+              <div class="readonly-field">{{ editForm.barcode }}</div>
             </div>
             <div class="modal-group">
               <label>Brand</label>
-              <input v-model="editForm.brand" class="input-field" />
+              <div class="readonly-field">{{ editForm.brand }}</div>
             </div>
           </div>
           <div class="modal-row">
             <div class="modal-group">
               <label>Tên Sản Phẩm</label>
-              <input v-model="editForm.name" class="input-field" />
+              <div class="readonly-field">{{ editForm.name }}</div>
             </div>
             <div class="modal-group">
               <label>Danh Mục</label>
-              <input v-model="editForm.category" class="input-field" />
+              <div class="readonly-field">{{ editForm.category }}</div>
             </div>
           </div>
           <div class="modal-row">
@@ -266,6 +260,16 @@
             <div class="modal-group">
               <label>Giá Vốn (₫)</label>
               <input v-model.number="editForm.unit_cost" type="number" step="0.01" min="0" class="input-field" />
+            </div>
+          </div>
+          <div class="modal-row">
+            <div class="modal-group">
+              <label>Đã Bán</label>
+              <div class="readonly-field">{{ editForm.sold_count }}</div>
+            </div>
+            <div class="modal-group">
+              <label>Còn Tồn</label>
+              <div class="readonly-field">{{ Math.max(editForm.qty_in - editForm.sold_count, 0) }}</div>
             </div>
           </div>
           <div class="modal-row">
@@ -295,26 +299,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { importsAPI, productsAPI } from '../services/api';
 
-const form = ref({
-  barcode: '',
-  brand: '',
-  name: '',
-  category: '',
-  qty_in: 1,
-  unit_cost: 0,
-  break_even_price: 0,
-  import_date: new Date().toISOString().split('T')[0],
-  note: '',
-});
-
+const pendingItems = ref([]);
+const barcodeInputValue = ref('');
 const imports = ref([]);
 const loading = ref(false);
 const message = ref(null);
 const searchQuery = ref('');
-const hasCustomBreakEven = ref(false);
+const selectedMonth = ref('');
 
 const editingId = ref(null);
 const editForm = ref({
@@ -327,35 +321,33 @@ const editForm = ref({
   break_even_price: 0,
   import_date: '',
   note: '',
+  sold_count: 0,
 });
 const isEditModalOpen = ref(false);
 const barcodeInput = ref(null);
 
 const filteredImports = computed(() => {
-  return imports.value.filter((item) => {
-    const query = searchQuery.value.toLowerCase();
-    return (
-      item[1].toLowerCase().includes(query) ||
-      item[3].toLowerCase().includes(query)
-    );
-  });
+  const query = (searchQuery.value || '').trim().toLowerCase();
+  const monthFilter = selectedMonth.value;
+
+  return imports.value
+    .filter((item) => {
+      const barcode = (item[1] || '').toString().toLowerCase();
+      const name = (item[3] || '').toString().toLowerCase();
+      const matchesQuery = !query || barcode.includes(query) || name.includes(query);
+
+      if (!matchesQuery) return false;
+      if (!monthFilter) return true;
+
+      const isoDate = getItemImportDateISO(item);
+      return isoDate ? isoDate.startsWith(monthFilter) : false;
+    })
+    .sort((a, b) => getItemDateValue(b) - getItemDateValue(a));
 });
 
-// Danh sách brand đã từng nhập (từ bảng imports)
-const uniqueBrands = computed(() => {
-  const set = new Set(
-    imports.value
-      .map((r) => (r && typeof r[2] === 'string' ? r[2].trim() : ''))
-      .filter((b) => b)
-  );
-  return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }));
-});
-
-// Products for auto-fill by barcode
 const productsHeader = ref([]);
 const productsData = ref([]);
 const productsReady = ref(false);
-const barcodeSuggestions = ref([]);
 
 function headerIndex(name) {
   if (!productsHeader.value || productsHeader.value.length === 0) return -1;
@@ -372,62 +364,109 @@ function getCell(row, colName) {
 async function loadProducts() {
   try {
     const result = await productsAPI.getAll();
-    console.log(result)
     productsHeader.value = result.header || [];
     productsData.value = result.data || [];
-    productsReady.value = (productsHeader.value.length > 0);
-    if ((form.value.barcode || '').trim()) {
-      updateBarcodeSuggestions();
-    }
+    productsReady.value = productsHeader.value.length > 0;
   } catch (e) {
     // ignore soft-fail
   }
 }
 
-function updateBarcodeSuggestions() {
-  barcodeSuggestions.value = [];
-  const bcIdx = headerIndex('barcode');
-  if (bcIdx < 0) return;
-  const target = (form.value.barcode || '').trim();
-  if (!target) return;
-  const matches = productsData.value.filter((r) => r && String(r[bcIdx]).trim() === target);
-  barcodeSuggestions.value = matches;
-}
-
-function fillMissingFromRow(row) {
-  const brand = getCell(row, 'hãng');
-  const name = getCell(row, 'tên');
-  const category = getCell(row, 'phân loại');
-  if (!form.value.brand && brand) form.value.brand = brand;
-  if (!form.value.name && name) form.value.name = name;
-  if (!form.value.category && category) form.value.category = category;
-}
-
-function selectSuggestedProduct(row) {
-  fillMissingFromRow(row);
-  barcodeSuggestions.value = [];
-}
-
-// Default break-even = unit_cost / 0.7 unless user edits
-watch(
-  () => form.value.unit_cost,
-  (val) => {
-    if (!hasCustomBreakEven.value) {
-      const num = Number(val || 0);
-      form.value.break_even_price = num > 0 ? +(num / 0.7).toFixed(2) : 0;
-    }
+function getDefaultImportDate() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+    }).format(new Date());
+  } catch (_) {
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    return local.toISOString().split('T')[0];
   }
-);
+}
 
-// Auto-fill when barcode changes and products are ready
-watch(
-  [() => form.value.barcode, () => productsReady.value],
-  ([barcode, ready]) => {
-    if (ready) {
-      updateBarcodeSuggestions();
-    }
+function getItemImportDateISO(item) {
+  if (!item || !item[8]) return '';
+  return toISODateFromVN(String(item[8]));
+}
+
+function getItemDateValue(item) {
+  const iso = getItemImportDateISO(item);
+  if (!iso) return 0;
+  const ts = Date.parse(iso);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+function focusBarcodeInput() {
+  nextTick(() => {
+    try {
+      barcodeInput.value && barcodeInput.value.focus && barcodeInput.value.focus();
+    } catch (_) {}
+  });
+}
+
+function createPendingItemFromRow(row) {
+  return {
+    barcode: getCell(row, 'barcode').trim(),
+    brand: getCell(row, 'hãng').trim(),
+    name: getCell(row, 'tên').trim(),
+    category: getCell(row, 'phân loại').trim(),
+    qty_in: 1,
+    unit_cost: 0,
+    break_even_price: 0,
+    import_date: getDefaultImportDate(),
+    note: '',
+    hasCustomBreakEven: false,
+  };
+}
+
+async function handleBarcodeScan() {
+  const code = (barcodeInputValue.value || '').trim();
+  if (!code) return;
+
+  const existing = pendingItems.value.find((item) => item.barcode === code);
+  if (existing) {
+    existing.qty_in += 1;
+    ensureMinimumQuantity(existing);
+    barcodeInputValue.value = '';
+    focusBarcodeInput();
+    return;
   }
-);
+
+  if (!productsReady.value) {
+    await loadProducts();
+  }
+  const row = findProductRowByBarcode(code);
+  if (!row) {
+    showMessage(`Không tìm thấy sản phẩm với barcode ${code}`, 'error');
+    barcodeInputValue.value = '';
+    focusBarcodeInput();
+    return;
+  }
+
+  pendingItems.value.unshift(createPendingItemFromRow(row));
+  barcodeInputValue.value = '';
+  focusBarcodeInput();
+}
+
+function ensureMinimumQuantity(item) {
+  const qty = Number(item.qty_in) || 0;
+  item.qty_in = qty < 1 ? 1 : qty;
+}
+
+function handleUnitCostChange(item) {
+  item.unit_cost = Number(item.unit_cost) || 0;
+  if (!item.hasCustomBreakEven) {
+    item.break_even_price = item.unit_cost > 0 ? +(item.unit_cost / 0.7).toFixed(2) : 0;
+  }
+}
+
+function markCustomBreakEven(item) {
+  item.hasCustomBreakEven = true;
+}
+
+function removePendingItem(barcode) {
+  pendingItems.value = pendingItems.value.filter((item) => item.barcode !== barcode);
+}
 
 async function loadImports() {
   loading.value = true;
@@ -442,32 +481,35 @@ async function loadImports() {
 }
 
 async function submitForm() {
+  if (pendingItems.value.length === 0) {
+    showMessage('Vui lòng thêm ít nhất 1 sản phẩm trước khi lưu', 'error');
+    focusBarcodeInput();
+    return;
+  }
+
   loading.value = true;
   try {
     const now = new Date();
     const createdAt = now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 
-    // Nếu barcode chưa có trong products, thêm sản phẩm mới trước (không chặn luồng nếu lỗi)
-    await ensureProductExists();
-
-    await importsAPI.create({
-      ...form.value,
-      created_at: createdAt,
-    });
+    for (const item of pendingItems.value) {
+      const payload = {
+        barcode: item.barcode,
+        brand: item.brand,
+        name: item.name,
+        category: item.category,
+        qty_in: item.qty_in,
+        unit_cost: item.unit_cost,
+        break_even_price: item.break_even_price,
+        import_date: item.import_date,
+        note: item.note,
+        created_at: createdAt,
+      };
+      await importsAPI.create(payload);
+    }
 
     showMessage('Thêm lô hàng thành công!', 'success');
-    form.value = {
-      barcode: '',
-      brand: '',
-      name: '',
-      category: '',
-      qty_in: 1,
-      unit_cost: 0,
-      break_even_price: 0,
-      import_date: new Date().toISOString().split('T')[0],
-      note: '',
-    };
-    hasCustomBreakEven.value = false;
+    resetForm();
     await loadImports();
   } catch (error) {
     showMessage('Lỗi: ' + error.message, 'error');
@@ -484,39 +526,6 @@ function findProductRowByBarcode(barcode) {
   return productsData.value.find((r) => r && String(r[bcIdx]).trim() === target) || null;
 }
 
-async function ensureProductExists() {
-  try {
-    if (!productsReady.value) {
-      try {
-        const result = await productsAPI.getAll();
-        productsHeader.value = result.header || [];
-        productsData.value = result.data || [];
-        productsReady.value = (productsHeader.value.length > 0);
-      } catch (_) {
-        // ignore
-      }
-    }
-    const bc = (form.value.barcode || '').trim();
-    if (!bc) return;
-    const found = findProductRowByBarcode(bc);
-    if (found) return;
-
-    // Dựng payload theo header của sheet sản phẩm
-    const payload = {
-      barcode: bc,
-      'hãng': form.value.brand || '',
-      'tên': form.value.name || '',
-      'phân loại': form.value.category || '',
-    };
-    await productsAPI.create(payload);
-    // Cập nhật lại cache products để các gợi ý dùng ngay dữ liệu mới
-    await loadProducts();
-  } catch (e) {
-    // Không chặn thêm lô hàng; chỉ log mềm
-    console.warn('Create product failed:', e);
-  }
-}
-
 function toISODateFromVN(d) {
   if (!d) return '';
   const parts = d.split('/');
@@ -528,22 +537,9 @@ function toISODateFromVN(d) {
 }
 
 function resetForm() {
-  form.value = {
-    barcode: '',
-    brand: '',
-    name: '',
-    category: '',
-    qty_in: 1,
-    unit_cost: 0,
-    break_even_price: 0,
-    import_date: new Date().toISOString().split('T')[0],
-    note: '',
-  };
-  hasCustomBreakEven.value = false;
-  barcodeSuggestions.value = [];
-  nextTick(() => {
-    try { barcodeInput.value && barcodeInput.value.focus && barcodeInput.value.focus(); } catch (_) {}
-  });
+  pendingItems.value = [];
+  barcodeInputValue.value = '';
+  focusBarcodeInput();
 }
 
 function openEditModal(item) {
@@ -558,6 +554,7 @@ function openEditModal(item) {
     break_even_price: Number(item[7] || 0),
     import_date: toISODateFromVN(item[8] || ''),
     note: item[9] || '',
+    sold_count: Number(item[10] || 0),
   };
   isEditModalOpen.value = true;
 }
@@ -569,6 +566,10 @@ function closeEditModal() {
 
 async function saveEdit() {
   if (!editingId.value) return;
+  if (Number(editForm.value.qty_in) < Number(editForm.value.sold_count)) {
+    showMessage('Số lượng nhập không thể nhỏ hơn số sản phẩm đã bán', 'error');
+    return;
+  }
   loading.value = true;
   try {
     const idxInAll = imports.value.findIndex((r) => r[0] === editingId.value);
@@ -627,6 +628,7 @@ function formatNumber(num) {
 onMounted(() => {
   loadImports();
   loadProducts();
+  focusBarcodeInput();
 });
 </script>
 
@@ -701,6 +703,66 @@ label {
   outline: none;
   border-color: #86c06b;
   box-shadow: 0 0 0 3px rgba(134, 192, 107, 0.1);
+}
+
+.barcode-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-add-barcode {
+  padding: 10px 18px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.btn-add-barcode:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-add-barcode:not(:disabled):hover {
+  background: #bae6fd;
+  transform: translateY(-1px);
+}
+
+.input-hint {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 6px;
+}
+
+.pending-list {
+  margin-top: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  overflow-x: auto;
+}
+
+.pending-table th,
+.pending-table td {
+  white-space: nowrap;
+}
+
+.pending-empty {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px dashed #d1d5db;
+  border-radius: 12px;
+  color: #6b7280;
+  background: #f9fafb;
+  text-align: center;
+}
+
+.inline-input {
+  min-width: 110px;
 }
 
 .btn-submit {
@@ -853,12 +915,17 @@ label {
   background: #e5e7eb;
 }
 
-.search-bar {
+.filters-bar {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
   margin-bottom: 16px;
 }
 
 .search-input {
-  width: 100%;
+  flex: 1;
+  min-width: 240px;
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -866,10 +933,31 @@ label {
   font-family: inherit;
 }
 
-.search-input:focus {
+.search-input:focus,
+.month-input:focus {
   outline: none;
   border-color: #86c06b;
   box-shadow: 0 0 0 3px rgba(134, 192, 107, 0.1);
+}
+
+.month-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.month-filter label {
+  font-size: 13px;
+  color: #555;
+}
+
+.month-input {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
 }
 
 .loading,
