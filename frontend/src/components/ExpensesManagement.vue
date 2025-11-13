@@ -94,7 +94,17 @@
         <button @click="loadExpenses" class="btn-refresh">🔄 Làm Mới</button>
       </div>
 
-      <div class="search-bar">
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label for="monthFilter">Lọc theo tháng:</label>
+          <input
+            v-model="selectedMonth"
+            type="month"
+            id="monthFilter"
+            class="filter-input"
+          />
+          <button v-if="selectedMonth" @click="resetMonthFilter" class="btn-clear">Xóa lọc</button>
+        </div>
         <input
           v-model="searchQuery"
           type="text"
@@ -202,6 +212,7 @@ const expenses = ref([]);
 const loading = ref(false);
 const message = ref(null);
 const searchQuery = ref('');
+const selectedMonth = ref('');
 
 const editingIdx = ref(null);
 const editForm = ref({
@@ -213,13 +224,29 @@ const editForm = ref({
 });
 const isEditModalOpen = ref(false);
 
+function getMonthFromVNDate(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('/');
+  if (parts.length === 3) {
+    const [dd, mm, yyyy] = parts;
+    return `${yyyy}-${mm.padStart(2, '0')}`;
+  }
+  return '';
+}
+
 const filteredExpenses = computed(() => {
   return expenses.value.filter((item) => {
     const query = searchQuery.value.toLowerCase();
-    return (
+    const matchesSearch =
       item[1].toLowerCase().includes(query) ||
-      item[4].toLowerCase().includes(query)
-    );
+      item[4].toLowerCase().includes(query);
+
+    if (!selectedMonth.value) return matchesSearch;
+
+    const itemMonth = getMonthFromVNDate(item[0]);
+    const matchesMonth = itemMonth === selectedMonth.value;
+
+    return matchesSearch && matchesMonth;
   });
 });
 
@@ -238,6 +265,10 @@ const uniquePayers = computed(() => {
   );
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }));
 });
+
+function resetMonthFilter() {
+  selectedMonth.value = '';
+}
 
 function toISODateFromVN(d) {
   if (!d) return '';
@@ -538,8 +569,54 @@ label {
   background: #e5e7eb;
 }
 
-.search-bar {
+.filter-bar {
   margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+  white-space: nowrap;
+  margin: 0;
+}
+
+.filter-input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.filter-input:focus {
+  outline: none;
+  border-color: #86c06b;
+  box-shadow: 0 0 0 3px rgba(134, 192, 107, 0.1);
+}
+
+.btn-clear {
+  padding: 6px 12px;
+  background: #f3f4f6;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-clear:hover {
+  background: #e5e7eb;
 }
 
 .search-input {
