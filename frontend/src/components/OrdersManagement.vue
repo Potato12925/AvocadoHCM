@@ -5,7 +5,12 @@
     <!-- Form Tạo Đơn Hàng -->
     <div class="form-section">
       <h2 class="section-title">Thông Tin Đơn Hàng</h2>
-      <form @submit.prevent="submitOrder" @keydown.enter.prevent class="order-form">
+      <form
+        @submit.prevent="submitOrder"
+        @keydown.enter.prevent
+        @keydown.ctrl.enter.prevent="handleCtrlEnter"
+        class="order-form"
+      >
         <div class="form-row">
           <div class="form-group">
             <label for="customerName">Tên Khách Hàng</label>
@@ -24,6 +29,8 @@
               type="text"
               id="orderCode"
               placeholder="Để trống để tự sinh"
+              ref="orderCodeRef"
+              @keyup.enter="focusBarcode"
               class="input-field"
             />
           </div>
@@ -49,6 +56,7 @@
             type="text"
             id="barcodeInput"
             placeholder="Nhập hoặc quét mã barcode"
+            ref="barcodeInputRef"
             @keyup.enter="addProductByBarcode"
             class="input-field"
           />
@@ -220,7 +228,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { importsAPI, ordersAPI, soldAPI } from '../services/api';
 import { generateUniqueId } from '../services/api';
 
@@ -231,6 +239,8 @@ const orderForm = ref({
 });
 
 const barcodeInput = ref('');
+const orderCodeRef = ref(null);
+const barcodeInputRef = ref(null);
 const cartItems = ref([]);
 const imports = ref([]);
 const loading = ref(false);
@@ -432,6 +442,24 @@ function addProductByBarcode() {
   barcodeInput.value = '';
 }
 
+function focusBarcode() {
+  if (barcodeInputRef.value) {
+    barcodeInputRef.value.focus();
+  }
+}
+
+function focusOrderCode() {
+  if (orderCodeRef.value) {
+    orderCodeRef.value.focus();
+  }
+}
+
+async function handleCtrlEnter() {
+  await submitOrder();
+  await nextTick();
+  focusOrderCode();
+}
+
 function refreshAllocationsForIndex(idx) {
   const item = cartItems.value[idx];
   if (!item) return;
@@ -471,6 +499,7 @@ function clearCart() {
 }
 
 async function submitOrder() {
+  if (loading.value) return;
   if (cartItems.value.length === 0) {
     showMessage('Vui lòng thêm sản phẩm vào đơn hàng', 'error');
     return;
@@ -479,7 +508,8 @@ async function submitOrder() {
   loading.value = true;
   try {
     const orderID = generateUniqueId();
-    const orderCode = orderForm.value.order_code || `ORD-${Date.now()}`;
+    const inputOrderCode = (orderForm.value.order_code || '').trim();
+    const orderCode = inputOrderCode || `ORD-${Date.now()}`;
 
     // Ghi đơn hàng
     await ordersAPI.create({

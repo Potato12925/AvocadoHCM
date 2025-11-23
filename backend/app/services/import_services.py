@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 from app.models.sheets import Sheets
 from app.utils.id_generator import gen_product_id
 from app.models.imports import ImportItem, DeleteRowsRequest, UpdateRowsRequest
+from app.services.product_services import sync_product_quantities
 
 # ===================== Helpers & Constants =====================
 
@@ -119,6 +120,7 @@ def create_import_row(item: ImportItem) -> Dict[str, Any]:
     ]
 
     ws.append_row(row, value_input_option="USER_ENTERED")
+    sync_product_quantities()
     return {
         "message": "✅ Đã thêm lô hàng mới",
         "productID": product_id,
@@ -177,6 +179,9 @@ def update_rows_bulk(req: UpdateRowsRequest) -> Dict[str, Any]:
         except Exception as e:
             errors.append({"row": r, "error": str(e)})
 
+    if updated_rows:
+        sync_product_quantities()
+
     return {
         "updated_rows": updated_rows,
         "skipped": skipped,
@@ -208,6 +213,9 @@ def delete_rows_by_indices(req: DeleteRowsRequest) -> Dict[str, Any]:
     for r in will_delete:
         ws.delete_rows(r)
         deleted.append(r)
+
+    if deleted:
+        sync_product_quantities()
 
     return {
         "summary": {

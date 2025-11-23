@@ -72,6 +72,27 @@
         <button class="modal-close" @click="closeModal">×</button>
       </div>
       <div class="modal-body">
+        <div v-if="errorMessage" class="alert error-alert">{{ errorMessage }}</div>
+        <div v-if="!isEditing" class="modal-row modal-row-full">
+          <div class="modal-group">
+            <label for="pm-copy-existing">Lấy thông tin từ sản phẩm có sẵn</label>
+            <select
+              id="pm-copy-existing"
+              class="input-field"
+              v-model="selectedTemplateIdx"
+            >
+              <option value="">-- Chọn sản phẩm --</option>
+              <option
+                v-for="option in templateOptions"
+                :key="`${option.barcode}-${option.idx}`"
+                :value="String(option.idx)"
+              >
+                {{ option.barcode }} - {{ option.brand }} {{ option.name }} ({{ option.category || 'Chưa phân loại' }})
+              </option>
+            </select>
+            <p class="helper-text">Các trường bên dưới sẽ được điền dựa trên sản phẩm đã chọn.</p>
+          </div>
+        </div>
         <div class="modal-row">
           <div class="modal-group">
             <label for="pm-barcode">Barcode</label>
@@ -113,7 +134,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { productsAPI, importsAPI } from '../services/api';
 
 const products = ref([]); // mảng rows [barcode, hãng, tên, phân loại, đã đăng]
@@ -124,7 +145,10 @@ const modalOpen = ref(false);
 const isEditing = ref(false);
 const saving = ref(false);
 const editBarcodeRef = ref('');
+const selectedTemplateIdx = ref('');
+const errorMessage = ref('');
 const form = ref({ barcode: '', brand: '', name: '', category: '', published: '' });
+const collator = new Intl.Collator('vi', { sensitivity: 'base', usage: 'sort' });
 
 // Bản đồ tồn kho theo barcode, lấy từ bảng Imports (cộng dồn available_qty)
 const stockByBarcode = computed(() => {
@@ -168,9 +192,28 @@ const groupedProducts = computed(() => {
   return Array.from(map.values());
 });
 
+const templateOptions = computed(() => {
+  return (products.value || [])
+    .map((row, idx) => ({
+      idx,
+      barcode: (row?.[0] || '').toString(),
+      brand: row?.[1] || '',
+      name: row?.[2] || '',
+      category: row?.[3] || '',
+    }))
+    .filter((option) => option.barcode || option.name);
+});
+
 const filteredProducts = computed(() => {
   const query = (searchQuery.value || '').toLowerCase();
-  return groupedProducts.value.filter((item) => {
+  const sorted = [...groupedProducts.value].sort((a, b) => {
+    const brandCompare = collator.compare(a[1] || '', b[1] || '');
+    if (brandCompare !== 0) return brandCompare;
+    const nameCompare = collator.compare(a[2] || '', b[2] || '');
+    if (nameCompare !== 0) return nameCompare;
+    return collator.compare(a[3] || '', b[3] || '');
+  });
+  return sorted.filter((item) => {
     return (
       (item[0] || '').toLowerCase().includes(query) ||
       (item[2] || '').toLowerCase().includes(query)
@@ -207,6 +250,8 @@ onMounted(() => {
 function openAddModal() {
   console.log("Mở cửa sổ thêm")
   isEditing.value = false;
+  selectedTemplateIdx.value = '';
+  errorMessage.value = '';
   form.value = { barcode: '', brand: '', name: '', category: '', published: '' };
   modalOpen.value = true;
   console.log(modalOpen.value)
@@ -214,6 +259,8 @@ function openAddModal() {
 
 function openEditModal(item) {
   isEditing.value = true;
+  selectedTemplateIdx.value = '';
+  errorMessage.value = '';
   form.value = {
     barcode: item[0] || '',
     brand: item[1] || '',
@@ -228,13 +275,49 @@ function openEditModal(item) {
 function closeModal() {
   modalOpen.value = false;
   saving.value = false;
+  selectedTemplateIdx.value = '';
+  errorMessage.value = '';
 }
+
+watch(selectedTemplateIdx, (val) => {
+  if (isEditing.value) return;
+  if (val === '' || val === null || val === undefined) return;
+  const idx = Number(val);
+  if (!Number.isInteger(idx)) return;
+  const row = products.value?.[idx];
+  if (!row) return;
+  form.value = {
+    barcode: row[0] || '',
+    brand: row[1] || '',
+    name: row[2] || '',
+    category: row[3] || '',
+    published: String(row[4] || '').trim() === '1' ? '1' : '',
+  };
+});
 
 async function saveProduct() {
   try {
     saving.value = true;
+    errorMessage.value = '';
+    const barcode = (form.value.barcode || '').toString().trim();
+    if (!barcode) {
+      errorMessage.value = 'Vui lòng nhập barcode';
+      saving.value = false;
+      return;
+    }
+    if (!isEditing.value) {
+      const isDuplicate = (products.value || []).some(
+        (row) => String(row?.[0] || '').trim() === barcode,
+      );
+      if (isDuplicate) {
+        errorMessage.value = 'Barcode đã tồn tại, vui lòng chỉnh sửa sản phẩm cũ hoặc nhập barcode khác.';
+        saving.value = false;
+        return;
+      }
+    }
+
     const payload = {
-      barcode: form.value.barcode,
+      barcode,
       'hãng': form.value.brand || '',
       'tên': form.value.name || '',
       'phân loại': form.value.category || '',
@@ -591,10 +674,34 @@ async function deleteByBarcode(barcode) {
   margin-bottom: 12px;
 }
 
+.modal-row-full {
+  grid-template-columns: 1fr;
+}
+
 .modal-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.helper-text {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 4px 0 0;
+}
+
+.alert {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.error-alert {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
 }
 
 /* Inputs inside modal (match ImportsManagement) */
