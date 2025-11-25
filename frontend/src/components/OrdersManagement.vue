@@ -207,7 +207,7 @@
         Chưa có đơn hàng nào được tạo.
       </div>
       <div v-else class="history-list">
-        <div class="history-card" v-for="order in filteredOrders" :key="order.orderID">
+        <div class="history-card" v-for="order in filteredOrders" :key="order.order_code">
           <div class="history-card-main">
             <div class="history-card-info">
               <div class="history-order-code">{{ order.order_code || '(Không mã)' }}</div>
@@ -221,13 +221,13 @@
               <button
                 type="button"
                 class="btn-return"
-                :disabled="isReturning(order.orderID) || isReturned(order.orderID) || orderProducts(order.orderID).length === 0"
-                @click="handleReturnOrder(order.orderID)"
+                :disabled="isReturning(order.order_code) || isReturned(order.order_code) || orderProducts(order.order_code).length === 0"
+                @click="handleReturnOrder(order.order_code)"
               >
                 {{
-                  isReturned(order.orderID)
+                  isReturned(order.order_code)
                     ? 'Đã trả'
-                    : isReturning(order.orderID)
+                    : isReturning(order.order_code)
                       ? 'Đang trả...'
                       : '↩ Trả hàng'
                 }}
@@ -235,23 +235,23 @@
               <button
                 type="button"
                 class="btn-toggle"
-                @click="toggleOrderDetails(order.orderID)"
+                @click="toggleOrderDetails(order.order_code)"
               >
-                {{ isOrderExpanded(order.orderID) ? 'Thu gọn' : 'Xem sản phẩm' }}
+                {{ isOrderExpanded(order.order_code) ? 'Thu gọn' : 'Xem sản phẩm' }}
               </button>
             </div>
           </div>
 
           <transition name="fade">
-            <div v-if="isOrderExpanded(order.orderID)" class="history-details">
-              <div v-if="orderProducts(order.orderID).length === 0" class="history-empty-products">
+            <div v-if="isOrderExpanded(order.order_code)" class="history-details">
+              <div v-if="orderProducts(order.order_code).length === 0" class="history-empty-products">
                 Chưa có sản phẩm nào được ghi lại cho đơn này.
               </div>
               <div v-else class="history-products">
                 <div
                   class="history-product"
-                  v-for="item in orderProducts(order.orderID)"
-                  :key="`${order.orderID}-${item.productID}-${item.barcode}`"
+                  v-for="item in orderProducts(order.order_code)"
+                  :key="`${order.order_code}-${item.productID}-${item.barcode}`"
                 >
                   <div class="history-product-main">
                     <div class="history-product-name">{{ item.name }}</div>
@@ -379,7 +379,7 @@ async function loadOrderHistory() {
       .map((row, idx) => ({
         orderID: row?.[0] || '',
         customer_name: row?.[1] || '',
-        order_code: row?.[2] || '',
+        order_code: row?.[2] || row?.[0] || '',
         package_date: row?.[3] || '',
         total_cost: Number(row?.[4]) || 0,
         note: row?.[5] || '',
@@ -392,7 +392,7 @@ async function loadOrderHistory() {
       });
 
     soldHistory.value = soldData.map((row, idx) => ({
-      orderID: row?.[0] || '',
+      order_code: row?.[0] || '',
       productID: row?.[1] || '',
       barcode: row?.[2] || '',
       brand: row?.[3] || '',
@@ -409,7 +409,7 @@ async function loadOrderHistory() {
     const returned = new Set();
     for (const ord of orderHistory.value) {
       if (String(ord.note || '').toLowerCase().includes('returned')) {
-        returned.add(ord.orderID);
+        returned.add(ord.order_code);
       }
     }
     returnedOrders.value = returned;
@@ -423,15 +423,15 @@ async function loadOrderHistory() {
 const orderItemsMap = computed(() => {
   const map = {};
   for (const item of soldHistory.value || []) {
-    if (!item.orderID) continue;
-    if (!map[item.orderID]) map[item.orderID] = [];
-    map[item.orderID].push(item);
+    if (!item.order_code) continue;
+    if (!map[item.order_code]) map[item.order_code] = [];
+    map[item.order_code].push(item);
   }
   return map;
 });
 
-function orderProducts(orderID) {
-  return orderItemsMap.value[orderID] || [];
+function orderProducts(orderCode) {
+  return orderItemsMap.value[orderCode] || [];
 }
 
 const filteredOrders = computed(() => {
@@ -451,7 +451,7 @@ const filteredOrders = computed(() => {
     }
 
     if (barcode) {
-      const items = orderProducts(o.orderID);
+      const items = orderProducts(o.order_code);
       const match = items.some((it) =>
         String(it.barcode || '').toLowerCase().includes(barcode),
       );
@@ -468,26 +468,26 @@ function clearFilters() {
   filterDateTo.value = '';
 }
 
-function toggleOrderDetails(orderID) {
+function toggleOrderDetails(orderCode) {
   const next = new Set(expandedOrders.value);
-  if (next.has(orderID)) {
-    next.delete(orderID);
+  if (next.has(orderCode)) {
+    next.delete(orderCode);
   } else {
-    next.add(orderID);
+    next.add(orderCode);
   }
   expandedOrders.value = next;
 }
 
-function isOrderExpanded(orderID) {
-  return expandedOrders.value.has(orderID);
+function isOrderExpanded(orderCode) {
+  return expandedOrders.value.has(orderCode);
 }
 
-function isReturning(orderID) {
-  return returningOrders.value.has(orderID);
+function isReturning(orderCode) {
+  return returningOrders.value.has(orderCode);
 }
 
-function isReturned(orderID) {
-  return returnedOrders.value.has(orderID);
+function isReturned(orderCode) {
+  return returnedOrders.value.has(orderCode);
 }
 
 function parseImportDate(value) {
@@ -679,7 +679,7 @@ async function submitOrder() {
       for (const al of item.allocations || []) {
         if (!al || !al.qty) continue;
         await soldAPI.create({
-          orderID,
+          order_code: orderCode,
           productID: al.productID,
           barcode: item.barcode,
           brand: item.brand,
@@ -731,28 +731,28 @@ function showMessage(text, type) {
   }, 4000);
 }
 
-function addReturning(orderID) {
+function addReturning(orderCode) {
   const next = new Set(returningOrders.value);
-  next.add(orderID);
+  next.add(orderCode);
   returningOrders.value = next;
 }
 
-function removeReturning(orderID) {
+function removeReturning(orderCode) {
   const next = new Set(returningOrders.value);
-  next.delete(orderID);
+  next.delete(orderCode);
   returningOrders.value = next;
 }
 
-function markReturned(orderID) {
+function markReturned(orderCode) {
   const next = new Set(returnedOrders.value);
-  next.add(orderID);
+  next.add(orderCode);
   returnedOrders.value = next;
 }
 
-async function handleReturnOrder(orderID) {
-  if (!orderID || isReturning(orderID) || isReturned(orderID)) return;
+async function handleReturnOrder(orderCode) {
+  if (!orderCode || isReturning(orderCode) || isReturned(orderCode)) return;
 
-  const items = orderProducts(orderID);
+  const items = orderProducts(orderCode);
   if (!items || items.length === 0) {
     showMessage('Đơn này không có sản phẩm để trả hàng', 'error');
     return;
@@ -761,7 +761,7 @@ async function handleReturnOrder(orderID) {
   const confirmed = confirm('Xác nhận trả hàng/hoàn đơn? Hệ thống sẽ cộng lại tồn kho.');
   if (!confirmed) return;
 
-  addReturning(orderID);
+  addReturning(orderCode);
   try {
     await loadImports(); // lấy dữ liệu tồn kho mới nhất
 
@@ -799,24 +799,24 @@ async function handleReturnOrder(orderID) {
     applyLocalImportUpdates(updates);
     // Xóa các dòng sold đã ghi cho đơn
     const soldRowsToDelete = (soldHistory.value || [])
-      .filter((s) => String(s.orderID) === String(orderID))
+      .filter((s) => String(s.order_code) === String(orderCode))
       .map((s) => s.rowIndex)
       .filter((r) => Number.isInteger(r));
     if (soldRowsToDelete.length > 0) {
       await soldAPI.deleteRows(soldRowsToDelete);
     }
     // Xóa luôn dòng order để không thể nhập lại
-    const orderRowIndex = (orderHistory.value.find((o) => o.orderID === orderID) || {}).rowIndex;
+    const orderRowIndex = (orderHistory.value.find((o) => o.order_code === orderCode) || {}).rowIndex;
     if (orderRowIndex) {
       await ordersAPI.deleteRows([orderRowIndex]);
     }
     showMessage('Đã trả hàng, cộng lại tồn kho và xoá đơn', 'success');
-    markReturned(orderID);
+    markReturned(orderCode);
     await Promise.all([loadImports(), loadOrderHistory()]);
   } catch (error) {
     showMessage('Trả hàng thất bại: ' + error.message, 'error');
   } finally {
-    removeReturning(orderID);
+    removeReturning(orderCode);
   }
 }
 

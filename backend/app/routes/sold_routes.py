@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 router = APIRouter(prefix="/sold", tags=["Đã bán"])
 
 class SoldItem(BaseModel):
-    orderID: str
+    order_code: str
     productID: str
     barcode: str
     brand: str
@@ -42,7 +42,7 @@ def create_sold_item(item: SoldItem):
     try:
         ws = Sheets.sold()
         row = [
-            item.orderID,
+            item.order_code,
             item.productID,
             item.barcode,
             item.brand,
@@ -55,7 +55,7 @@ def create_sold_item(item: SoldItem):
         ws.append_row(row, value_input_option="USER_ENTERED")
         return {
             "message": "✅ Đã ghi sản phẩm đã bán",
-            "orderID": item.orderID
+            "order_code": item.order_code
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
