@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.models.sheets import Sheets
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 router = APIRouter(prefix="/sold", tags=["Đã bán"])
 
@@ -57,5 +57,24 @@ def create_sold_item(item: SoldItem):
             "message": "✅ Đã ghi sản phẩm đã bán",
             "orderID": item.orderID
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class DeleteRowsRequest(BaseModel):
+    rows: List[int]
+
+
+@router.post("/rows/delete")
+def delete_rows(req: DeleteRowsRequest):
+    """
+    Xóa nhiều dòng trong sheet Sold theo index (1-based).
+    """
+    try:
+        ws = Sheets.sold()
+        # Duyệt từ cuối lên để không lệch index khi xóa
+        for row_idx in sorted(req.rows or [], reverse=True):
+            ws.delete_rows(row_idx)
+        return {"message": "✅ Đã xoá dòng Sold", "count": len(req.rows)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

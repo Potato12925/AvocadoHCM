@@ -23,7 +23,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="orderCode">Mã Đơn Hàng</label>
+            <label for="orderCode">Mã Vận Đơn</label>
             <input
               v-model="orderForm.order_code"
               type="text"
@@ -170,13 +170,44 @@
           {{ historyLoading ? 'Đang tải...' : '⟳ Tải lại' }}
         </button>
       </div>
+      <div class="history-filters">
+        <div class="filter-group">
+          <label>Mã vận đơn</label>
+          <input
+            v-model="filterOrderCode"
+            type="text"
+            class="filter-input"
+            placeholder="Nhập mã đơn"
+          />
+        </div>
+        <div class="filter-group">
+          <label>Mã sản phẩm</label>
+          <input
+            v-model="filterBarcode"
+            type="text"
+            class="filter-input"
+            placeholder="Barcode trong đơn"
+          />
+        </div>
+        <div class="filter-group">
+          <label>Từ ngày</label>
+          <input v-model="filterDateFrom" type="date" class="filter-input" />
+        </div>
+        <div class="filter-group">
+          <label>Đến ngày</label>
+          <input v-model="filterDateTo" type="date" class="filter-input" />
+        </div>
+        <div class="filter-actions">
+          <button type="button" class="btn-secondary small" @click="clearFilters">Xóa lọc</button>
+        </div>
+      </div>
 
       <div v-if="historyLoading" class="history-empty">Đang tải dữ liệu đơn hàng...</div>
       <div v-else-if="orderHistory.length === 0" class="history-empty">
         Chưa có đơn hàng nào được tạo.
       </div>
       <div v-else class="history-list">
-        <div class="history-card" v-for="order in orderHistory" :key="order.orderID">
+        <div class="history-card" v-for="order in filteredOrders" :key="order.orderID">
           <div class="history-card-main">
             <div class="history-card-info">
               <div class="history-order-code">{{ order.order_code || '(Không mã)' }}</div>
@@ -186,13 +217,29 @@
                 <span>Tổng chi phí: {{ formatNumber(order.total_cost) }}₫</span>
               </div>
             </div>
-            <button
-              type="button"
-              class="btn-toggle"
-              @click="toggleOrderDetails(order.orderID)"
-            >
-              {{ isOrderExpanded(order.orderID) ? 'Thu gọn' : 'Xem sản phẩm' }}
-            </button>
+            <div class="history-actions">
+              <button
+                type="button"
+                class="btn-return"
+                :disabled="isReturning(order.orderID) || isReturned(order.orderID) || orderProducts(order.orderID).length === 0"
+                @click="handleReturnOrder(order.orderID)"
+              >
+                {{
+                  isReturned(order.orderID)
+                    ? 'Đã trả'
+                    : isReturning(order.orderID)
+                      ? 'Đang trả...'
+                      : '↩ Trả hàng'
+                }}
+              </button>
+              <button
+                type="button"
+                class="btn-toggle"
+                @click="toggleOrderDetails(order.orderID)"
+              >
+                {{ isOrderExpanded(order.orderID) ? 'Thu gọn' : 'Xem sản phẩm' }}
+              </button>
+            </div>
           </div>
 
           <transition name="fade">
@@ -249,6 +296,59 @@ const orderHistory = ref([]);
 const soldHistory = ref([]);
 const historyLoading = ref(false);
 const expandedOrders = ref(new Set());
+const returningOrders = ref(new Set());
+const returnedOrders = ref(new Set());
+const filterOrderCode = ref('');
+const filterBarcode = ref('');
+const filterDateFrom = ref('');
+const filterDateTo = ref('');
+
+/**
+ * Cập nhật cache imports.value theo danh sách updates (row 1-based, có header).
+ * Tránh phải reload toàn bộ khi chỉ đổi qty_sold/available_qty.
+ */
+function applyLocalImportUpdates(updates = []) {
+  if (!Array.isArray(updates) || updates.length === 0) return;
+
+  const map = new Map();
+  for (const u of updates) {
+    if (!u || !Number.isInteger(u.row) || u.row <= 1 || !u.data) continue;
+    map.set(u.row, u.data);
+  }
+  if (map.size === 0) return;
+
+  const next = imports.value.map((row, idx) => {
+    const sheetRow = idx + 2; // +1 header, +1 1-based
+    const data = map.get(sheetRow);
+    if (!data) return row;
+
+    const clone = Array.isArray(row) ? [...row] : [];
+    if (Object.prototype.hasOwnProperty.call(data, 'qty_in')) {
+      clone[5] = data.qty_in;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'qty_sold')) {
+      clone[10] = data.qty_sold;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'available_qty')) {
+      clone[11] = data.available_qty;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'unit_cost')) {
+      clone[6] = data.unit_cost;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'break_even_price')) {
+      clone[7] = data.break_even_price;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'import_date')) {
+      clone[8] = data.import_date;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'note')) {
+      clone[9] = data.note;
+    }
+    return clone;
+  });
+
+  imports.value = next;
+}
 
 function itemTotalCost(item) {
   if (!item || !Array.isArray(item.allocations)) return 0;
@@ -276,13 +376,14 @@ async function loadOrderHistory() {
     const soldData = soldRes?.data || [];
 
     orderHistory.value = ordersData
-      .map((row) => ({
+      .map((row, idx) => ({
         orderID: row?.[0] || '',
         customer_name: row?.[1] || '',
         order_code: row?.[2] || '',
         package_date: row?.[3] || '',
         total_cost: Number(row?.[4]) || 0,
         note: row?.[5] || '',
+        rowIndex: idx + 2, // 1-based + header
       }))
       .sort((a, b) => {
         const dateA = Date.parse(a.package_date) || 0;
@@ -290,7 +391,7 @@ async function loadOrderHistory() {
         return dateB - dateA;
       });
 
-    soldHistory.value = soldData.map((row) => ({
+    soldHistory.value = soldData.map((row, idx) => ({
       orderID: row?.[0] || '',
       productID: row?.[1] || '',
       barcode: row?.[2] || '',
@@ -300,9 +401,18 @@ async function loadOrderHistory() {
       qty_sold: Number(row?.[6]) || 0,
       unit_cost: Number(row?.[7]) || 0,
       total_cost: Number(row?.[8]) || 0,
+      rowIndex: idx + 2, // 1-based + header
     }));
 
     expandedOrders.value = new Set();
+    // Ghi nhận những đơn đã được đánh dấu trả (note chứa 'returned')
+    const returned = new Set();
+    for (const ord of orderHistory.value) {
+      if (String(ord.note || '').toLowerCase().includes('returned')) {
+        returned.add(ord.orderID);
+      }
+    }
+    returnedOrders.value = returned;
   } catch (error) {
     console.error('Error loading order history:', error);
   } finally {
@@ -324,6 +434,40 @@ function orderProducts(orderID) {
   return orderItemsMap.value[orderID] || [];
 }
 
+const filteredOrders = computed(() => {
+  const code = (filterOrderCode.value || '').toLowerCase();
+  const barcode = (filterBarcode.value || '').toLowerCase();
+  const from = filterDateFrom.value ? Date.parse(filterDateFrom.value) : null;
+  const to = filterDateTo.value ? Date.parse(filterDateTo.value) : null;
+
+  return orderHistory.value.filter((o) => {
+    if (code && !(o.order_code || '').toLowerCase().includes(code)) return false;
+
+    if (from || to) {
+      const pkgDate = Date.parse(o.package_date);
+      if (Number.isNaN(pkgDate)) return false;
+      if (from && pkgDate < from) return false;
+      if (to && pkgDate > to) return false;
+    }
+
+    if (barcode) {
+      const items = orderProducts(o.orderID);
+      const match = items.some((it) =>
+        String(it.barcode || '').toLowerCase().includes(barcode),
+      );
+      if (!match) return false;
+    }
+    return true;
+  });
+});
+
+function clearFilters() {
+  filterOrderCode.value = '';
+  filterBarcode.value = '';
+  filterDateFrom.value = '';
+  filterDateTo.value = '';
+}
+
 function toggleOrderDetails(orderID) {
   const next = new Set(expandedOrders.value);
   if (next.has(orderID)) {
@@ -336,6 +480,14 @@ function toggleOrderDetails(orderID) {
 
 function isOrderExpanded(orderID) {
   return expandedOrders.value.has(orderID);
+}
+
+function isReturning(orderID) {
+  return returningOrders.value.has(orderID);
+}
+
+function isReturned(orderID) {
+  return returnedOrders.value.has(orderID);
 }
 
 function parseImportDate(value) {
@@ -554,6 +706,7 @@ async function submitOrder() {
 
     if (updates.length > 0) {
       await importsAPI.updateRows(updates);
+      applyLocalImportUpdates(updates);
     }
 
     showMessage(`Tạo đơn hàng thành công! Mã: ${orderCode}`, 'success');
@@ -576,6 +729,95 @@ function showMessage(text, type) {
   setTimeout(() => {
     message.value = null;
   }, 4000);
+}
+
+function addReturning(orderID) {
+  const next = new Set(returningOrders.value);
+  next.add(orderID);
+  returningOrders.value = next;
+}
+
+function removeReturning(orderID) {
+  const next = new Set(returningOrders.value);
+  next.delete(orderID);
+  returningOrders.value = next;
+}
+
+function markReturned(orderID) {
+  const next = new Set(returnedOrders.value);
+  next.add(orderID);
+  returnedOrders.value = next;
+}
+
+async function handleReturnOrder(orderID) {
+  if (!orderID || isReturning(orderID) || isReturned(orderID)) return;
+
+  const items = orderProducts(orderID);
+  if (!items || items.length === 0) {
+    showMessage('Đơn này không có sản phẩm để trả hàng', 'error');
+    return;
+  }
+
+  const confirmed = confirm('Xác nhận trả hàng/hoàn đơn? Hệ thống sẽ cộng lại tồn kho.');
+  if (!confirmed) return;
+
+  addReturning(orderID);
+  try {
+    await loadImports(); // lấy dữ liệu tồn kho mới nhất
+
+    const qtyByProduct = {};
+    for (const item of items) {
+      if (!item.productID) continue;
+      const pid = String(item.productID);
+      qtyByProduct[pid] = (qtyByProduct[pid] || 0) + (Number(item.qty_sold) || 0);
+    }
+
+    const updates = [];
+    for (const [productID, qtyReturn] of Object.entries(qtyByProduct)) {
+      const importRowData = imports.value.find((imp) => String(imp[0]) === productID);
+      if (!importRowData) continue;
+
+      const rowIndex = imports.value.indexOf(importRowData) + 2; // 1-based + header
+      const totalQty = parseInt(importRowData[5], 10) || 0;
+      const currentQtySold = parseInt(importRowData[10], 10) || 0;
+      const qtyToDeduct = Math.min(qtyReturn, currentQtySold);
+      const newQtySold = Math.max(0, currentQtySold - qtyToDeduct);
+      const newAvailableQty = Math.max(0, totalQty - newQtySold);
+
+      updates.push({
+        row: rowIndex,
+        data: { qty_sold: newQtySold, available_qty: newAvailableQty },
+      });
+    }
+
+    if (updates.length === 0) {
+      showMessage('Không tìm thấy sản phẩm tương ứng để cộng lại tồn kho', 'error');
+      return;
+    }
+
+    await importsAPI.updateRows(updates);
+    applyLocalImportUpdates(updates);
+    // Xóa các dòng sold đã ghi cho đơn
+    const soldRowsToDelete = (soldHistory.value || [])
+      .filter((s) => String(s.orderID) === String(orderID))
+      .map((s) => s.rowIndex)
+      .filter((r) => Number.isInteger(r));
+    if (soldRowsToDelete.length > 0) {
+      await soldAPI.deleteRows(soldRowsToDelete);
+    }
+    // Xóa luôn dòng order để không thể nhập lại
+    const orderRowIndex = (orderHistory.value.find((o) => o.orderID === orderID) || {}).rowIndex;
+    if (orderRowIndex) {
+      await ordersAPI.deleteRows([orderRowIndex]);
+    }
+    showMessage('Đã trả hàng, cộng lại tồn kho và xoá đơn', 'success');
+    markReturned(orderID);
+    await Promise.all([loadImports(), loadOrderHistory()]);
+  } catch (error) {
+    showMessage('Trả hàng thất bại: ' + error.message, 'error');
+  } finally {
+    removeReturning(orderID);
+  }
 }
 
 function formatNumber(num) {
@@ -941,6 +1183,42 @@ label {
   margin-bottom: 12px;
 }
 
+.history-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+  align-items: end;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group label {
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.filter-input {
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-secondary.small {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
 .btn-refresh {
   padding: 8px 14px;
   border-radius: 8px;
@@ -994,6 +1272,12 @@ label {
   flex: 1;
 }
 
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .history-order-code {
   font-size: 18px;
   font-weight: 700;
@@ -1007,6 +1291,26 @@ label {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.btn-return {
+  border: 1px solid #fcd34d;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-return:hover:not(:disabled) {
+  background: #fde68a;
+}
+
+.btn-return:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-toggle {

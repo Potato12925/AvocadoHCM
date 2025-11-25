@@ -92,7 +92,34 @@ export const ordersAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to create order');
+    if (!response.ok) {
+      let detail = 'Failed to create order';
+      try {
+        const err = await response.json();
+        detail = err?.detail || detail;
+      } catch (_) {}
+      throw new Error(detail);
+    }
+    return response.json();
+  },
+
+  async updateRows(updates) {
+    const response = await fetch(`${API_BASE_URL}/orders/rows/update`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    });
+    if (!response.ok) throw new Error('Failed to update orders');
+    return response.json();
+  },
+
+  async deleteRows(rows) {
+    const response = await fetch(`${API_BASE_URL}/orders/rows/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    });
+    if (!response.ok) throw new Error('Failed to delete orders');
     return response.json();
   },
 };
@@ -115,6 +142,16 @@ export const soldAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create sold item');
+    return response.json();
+  },
+
+  async deleteRows(rows) {
+    const response = await fetch(`${API_BASE_URL}/sold/rows/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    });
+    if (!response.ok) throw new Error('Failed to delete sold items');
     return response.json();
   },
 };
