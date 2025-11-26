@@ -1,20 +1,26 @@
 @echo off
-title 🚀 FastAPI + Vue Startup
+chcp 65001 >nul
+title FastAPI + Vue Runner
 color 0A
 
-echo ====== START BACKEND ======
-cd backend
+echo ============================
+echo ===== START BACKEND ========
+echo ============================
+
+pushd backend
 call venv\Scripts\activate
+start "FASTAPI BACKEND" cmd /k "color 0B && echo FastAPI backend started && uvicorn app.main:app --reload --reload-dir app"
+popd
 
-:: chỉ watch thư mục app để không bị chậm
-start "FASTAPI BACKEND" cmd /k "color 0B && echo === FastAPI backend === && uvicorn app.main:app --reload --reload-dir app"
+echo ============================
+echo ===== START FRONTEND =======
+echo ============================
 
-cd ..
+pushd frontend
+start "VUE FRONTEND" cmd /k "color 0E && echo Vue frontend started && npm run dev -- --host 0.0.0.0 --port 5173"
+popd
 
-echo ====== START FRONTEND ======
-cd frontend
-start "VUE FRONTEND" cmd /k "color 0E && echo === Vue frontend === && npm run dev"
-cd ..
-
-echo ✅ Done
+echo.
+echo ====== EVERYTHING STARTED ======
+echo 🚀 BACKEND + FRONTEND Now Running!
 pause

@@ -23,7 +23,25 @@
             />
           </div>
           <div class="form-group">
-            <label for="orderCode">Mã Vận Đơn</label>
+            <div class="label-row">
+              <label for="orderCode">Mã Vận Đơn</label>
+              <button
+                type="button"
+                class="btn-scan-toggle"
+                :disabled="scanLockedUntilSubmit || scannerStarting"
+                @click="toggleOrderCodeScanner"
+              >
+                {{
+                  scannerStarting
+                    ? 'Đang mở camera...'
+                    : isOrderCodeScannerOn
+                      ? 'Tắt quét mã vận đơn'
+                      : scanLockedUntilSubmit
+                        ? 'Đã quét - chờ hoàn tất đơn'
+                        : 'Bật quét mã vận đơn'
+                }}
+              </button>
+            </div>
             <input
               v-model="orderForm.order_code"
               type="text"
@@ -33,6 +51,13 @@
               @keyup.enter="focusBarcode"
               class="input-field"
             />
+            <div v-if="isOrderCodeScannerOn" class="scanner-preview">
+              <video ref="orderCodeVideoRef" class="scanner-video" autoplay playsinline muted></video>
+              <div class="scanner-hint">Đưa mã QR vận đơn vào khung camera</div>
+            </div>
+            <div v-else-if="scannerError" class="scanner-error">
+              {{ scannerError }}
+            </div>
           </div>
         </div>
 
@@ -275,7 +300,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { importsAPI, ordersAPI, soldAPI } from '../services/api';
 import { generateUniqueId } from '../services/api';
 
@@ -302,6 +327,19 @@ const filterOrderCode = ref('');
 const filterBarcode = ref('');
 const filterDateFrom = ref('');
 const filterDateTo = ref('');
+const isOrderCodeScannerOn = ref(false);
+const scannerSupportsQR = ref(false);
+const scannerError = ref('');
+const scannerStarting = ref(false);
+const orderCodeVideoRef = ref(null);
+const scannerIntervalId = ref(null);
+const videoStream = ref(null);
+const scanLockedUntilSubmit = ref(false);
+const barcodeDetector = ref(null);
+const scannerMode = ref('detector'); // 'detector' | 'zxing'
+const zxingReader = ref(null);
+const zxingControls = ref(null);
+const zxingLib = ref(null);
 
 /**
  * Cập nhật cache imports.value theo danh sách updates (row 1-based, có header).
@@ -606,6 +644,217 @@ function focusOrderCode() {
   }
 }
 
+async function ensureScannerSupport() {
+  if (barcodeDetector.value || scannerSupportsQR.value) return true;
+
+  // Ưu tiên BarcodeDetector nếu có
+  if ('BarcodeDetector' in window) {
+    try {
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      if (formats.includes('qr_code')) {
+        barcodeDetector.value = new window.BarcodeDetector({ formats: ['qr_code'] });
+        scannerSupportsQR.value = true;
+        scannerMode.value = 'detector';
+        scannerError.value = '';
+        return true;
+      }
+    } catch (err) {
+      console.error('BarcodeDetector support error:', err);
+    }
+  }
+
+  // Fallback: dùng thư viện ZXing
+  try {
+    if (!zxingReader.value) {
+      const mod = await import('@zxing/browser');
+      zxingLib.value = mod;
+      zxingReader.value = new mod.BrowserMultiFormatReader();
+    }
+    scannerSupportsQR.value = true;
+    scannerMode.value = 'zxing';
+    scannerError.value = '';
+    return true;
+  } catch (err) {
+    console.error('ZXing fallback error:', err);
+    scannerError.value =
+      'Trình duyệt không hỗ trợ BarcodeDetector và không thể tải thư viện quét QR dự phòng.';
+    scannerSupportsQR.value = false;
+    return false;
+  }
+}
+
+function stopOrderCodeScanner() {
+  isOrderCodeScannerOn.value = false;
+  scannerStarting.value = false;
+  if (scannerIntervalId.value) {
+    clearInterval(scannerIntervalId.value);
+    scannerIntervalId.value = null;
+  }
+  if (zxingControls.value) {
+    try {
+      zxingControls.value(); // hàm stop trả về từ ZXing
+    } catch (err) {
+      console.warn('Stop ZXing error:', err);
+    }
+    zxingControls.value = null;
+  }
+  if (zxingReader.value) {
+    try {
+      zxingReader.value.reset();
+    } catch (err) {
+      console.warn('Reset ZXing error:', err);
+    }
+  }
+  if (videoStream.value) {
+    for (const track of videoStream.value.getTracks()) {
+      track.stop();
+    }
+    videoStream.value = null;
+  }
+}
+
+async function startOrderCodeScanner() {
+  if (scanLockedUntilSubmit.value) {
+    showMessage('Đã quét mã. Hoàn tất đơn trước khi quét tiếp.', 'error');
+    return;
+  }
+  const supported = await ensureScannerSupport();
+  if (!supported) return;
+  scannerStarting.value = true;
+  try {
+    // Yêu cầu quyền trước để hiện prompt rõ ràng
+    const preStream = await requestCameraPermission();
+    if (!preStream) {
+      scannerStarting.value = false;
+      return;
+    }
+    // Dừng stream vừa mở (ZXing sẽ tự mở lại nếu cần)
+    for (const track of preStream.getTracks()) {
+      track.stop();
+    }
+
+    // Hiển thị video preview trước khi gắn stream để ref tồn tại
+    isOrderCodeScannerOn.value = true;
+    await nextTick();
+    if (!orderCodeVideoRef.value) {
+      scannerError.value = 'Không khởi tạo được khung camera.';
+      stopOrderCodeScanner();
+      return;
+    }
+
+    const constraints = {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    };
+
+    if (scannerMode.value === 'detector') {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      videoStream.value = stream;
+      orderCodeVideoRef.value.srcObject = stream;
+      await orderCodeVideoRef.value.play();
+      scannerError.value = '';
+      scannerIntervalId.value = window.setInterval(async () => {
+        if (!barcodeDetector.value || !orderCodeVideoRef.value) return;
+        try {
+          const codes = await barcodeDetector.value.detect(orderCodeVideoRef.value);
+          if (Array.isArray(codes) && codes.length > 0) {
+            const code = codes[0]?.rawValue || '';
+            if (code) {
+              orderForm.value.order_code = code;
+              showMessage('Đã quét mã vận đơn', 'success');
+              scanLockedUntilSubmit.value = true;
+              stopOrderCodeScanner();
+            }
+          }
+        } catch (err) {
+          console.error('Scan error:', err);
+          scannerError.value = 'Không thể đọc mã, hãy thử lại.';
+        }
+      }, 400);
+    } else {
+      if (!zxingReader.value) {
+        throw new Error('Không khởi tạo được trình quét ZXing.');
+      }
+      isOrderCodeScannerOn.value = true;
+      scannerError.value = '';
+      zxingControls.value = await zxingReader.value.decodeFromVideoDevice(
+        undefined,
+        orderCodeVideoRef.value,
+        (result, err) => {
+          if (result) {
+            const code = result.getText?.() || result.text || '';
+            if (code) {
+              orderForm.value.order_code = code;
+              showMessage('Đã quét mã vận đơn', 'success');
+              scanLockedUntilSubmit.value = true;
+              stopOrderCodeScanner();
+            }
+          } else if (err) {
+            const NotFound = zxingLib.value?.NotFoundException;
+            if (!(NotFound && err instanceof NotFound)) {
+              console.warn('ZXing scan warning:', err);
+            }
+          }
+        },
+      );
+    }
+  } catch (err) {
+    console.error('Camera error:', err);
+    scannerError.value = 'Không thể mở camera. Vui lòng kiểm tra quyền truy cập.';
+  } finally {
+    scannerStarting.value = false;
+  }
+}
+
+function toggleOrderCodeScanner() {
+  if (isOrderCodeScannerOn.value) {
+    stopOrderCodeScanner();
+  } else {
+    showMessage('Trình duyệt sẽ yêu cầu quyền camera để quét mã vận đơn.', 'success');
+    startOrderCodeScanner();
+  }
+}
+
+async function requestCameraPermission() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    scannerError.value = 'Thiết bị không cho phép truy cập camera.';
+    return null;
+  }
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const status = await navigator.permissions.query({ name: 'camera' });
+        if (status.state === 'denied') {
+          scannerError.value = 'Trình duyệt đã chặn camera. Hãy cấp quyền và thử lại.';
+          return null;
+        }
+      } catch (err) {
+        console.warn('Permission query error:', err);
+      }
+    }
+    return await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+  } catch (err) {
+    console.error('Camera error:', err);
+    if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+      scannerError.value = 'Hãy cho phép quyền camera để quét mã vận đơn.';
+    } else {
+      scannerError.value = 'Không thể mở camera. Kiểm tra kết nối hoặc quyền truy cập.';
+    }
+    return null;
+  }
+}
+
 async function handleCtrlEnter() {
   await submitOrder();
   await nextTick();
@@ -715,6 +964,7 @@ async function submitOrder() {
       order_code: '',
       package_date: new Date().toISOString().split('T')[0],
     };
+    scanLockedUntilSubmit.value = false;
     cartItems.value = [];
     await loadOrderHistory();
   } catch (error) {
@@ -827,6 +1077,10 @@ function formatNumber(num) {
 onMounted(() => {
   loadImports();
   loadOrderHistory();
+});
+
+onUnmounted(() => {
+  stopOrderCodeScanner();
 });
 </script>
 
@@ -1146,6 +1400,65 @@ label {
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-scan-toggle {
+  padding: 8px 12px;
+  background: #e0f2fe;
+  color: #0f172a;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-scan-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-scan-toggle:not(:disabled):hover {
+  background: #bae6fd;
+}
+
+.scanner-preview {
+  margin-top: 10px;
+  border: 1px dashed #bfdbfe;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+}
+
+.scanner-video {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  background: #000;
+}
+
+.scanner-hint {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #0f172a;
+  background: #e0f2fe;
+  text-align: center;
+}
+
+.scanner-error {
+  margin-top: 6px;
+  color: #b91c1c;
+  font-size: 13px;
 }
 
 .message {
