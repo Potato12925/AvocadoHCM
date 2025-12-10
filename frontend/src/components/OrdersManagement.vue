@@ -2,272 +2,281 @@
   <div class="orders-container">
     <h1 class="page-title">🛒 Tạo Đơn Hàng</h1>
 
-    <!-- Form Tạo Đơn Hàng -->
-    <div class="form-section">
-      <h2 class="section-title">Thông Tin Đơn Hàng</h2>
-      <form
-        @submit.prevent="submitOrder"
-        @keydown.enter.prevent
-        @keydown.ctrl.enter.prevent="handleCtrlEnter"
-        class="order-form"
-      >
-        <div class="form-row">
-          <div class="form-group">
-            <label for="customerName">Tên Khách Hàng</label>
-            <input
-              v-model="orderForm.customer_name"
-              type="text"
-              id="customerName"
-              placeholder="Tên khách hàng"
-              class="input-field"
-            />
-          </div>
-          <div class="form-group">
-            <label for="orderCode">Mã Vận Đơn</label>
-            <input
-              v-model="orderForm.order_code"
-              type="text"
-              id="orderCode"
-              placeholder="Để trống để tự sinh"
-              ref="orderCodeRef"
-              @keyup.enter="focusBarcode"
-              class="input-field"
-            />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="packageDate">Ngày Đóng Gói</label>
-          <input
-            v-model="orderForm.package_date"
-            type="date"
-            id="packageDate"
-            required
-            class="input-field"
-          />
-        </div>
-
-        <h3 class="subsection-title">Thêm Sản Phẩm Vào Đơn</h3>
-
-        <div class="form-group">
-          <label for="barcodeInput">Quét/Nhập Barcode</label>
-          <input
-            v-model="barcodeInput"
-            type="text"
-            id="barcodeInput"
-            placeholder="Nhập hoặc quét mã barcode"
-            ref="barcodeInputRef"
-            @keyup.enter="addProductByBarcode"
-            class="input-field"
-          />
-        </div>
-
-        <div v-if="cartItems.length === 0" class="empty-cart">
-          Chưa có sản phẩm nào trong đơn hàng
-        </div>
-
-        <div v-else class="cart-items">
-          <div class="cart-item" v-for="(item, idx) in cartItems" :key="idx">
-            <div class="item-info">
-              <div class="item-name">{{ item.name }}</div>
-              <div class="item-details">
-                {{ item.barcode }} | {{ item.brand }} | {{ item.category }}
-              </div>
-              <div class="item-available">Tồn: {{ item.available_total }}</div>
-              <div class="item-chips">
-                <span
-                  v-for="al in item.allocations"
-                  :key="al.productID"
-                  class="chip chip-alloc"
-                >
-                  {{ al.qty }} × {{ formatNumber(al.unit_cost) }}₫ (ID {{ al.productID }})
-                </span>
-              </div>
-              <div class="item-cost">Tổng giá vốn: {{ formatNumber(itemTotalCost(item)) }}₫</div>
-            </div>
-
-            <div class="item-qty">
-              <button
-                type="button"
-                @click="decreaseQty(idx)"
-                class="btn-qty"
-                :disabled="item.qty_sold <= 1"
-              >
-                −
-              </button>
+    <div class="orders-layout">
+      <!-- Form Tạo Đơn Hàng -->
+      <div class="form-section">
+        <h2 class="section-title">Thông Tin Đơn Hàng</h2>
+        <form
+          @submit.prevent="submitOrder"
+          @keydown.enter.prevent
+          @keydown.ctrl.enter.prevent="handleCtrlEnter"
+          class="order-form"
+        >
+          <div class="form-row">
+            <div class="form-group">
+              <label for="customerName">Tên Khách Hàng</label>
               <input
-                v-model.number="item.qty_sold"
-                type="number"
-                min="1"
-                :max="item.available_total"
-                @change="refreshAllocationsForIndex(idx)"
-                class="qty-input"
+                v-model="orderForm.customer_name"
+                type="text"
+                id="customerName"
+                placeholder="Tên khách hàng"
+                class="input-field"
               />
+            </div>
+            <div class="form-group">
+              <label for="orderCode">Mã Vận Đơn</label>
+              <input
+                v-model="orderForm.order_code"
+                type="text"
+                id="orderCode"
+                placeholder="Để trống để tự sinh"
+                ref="orderCodeRef"
+                @keyup.enter="focusBarcode"
+                class="input-field"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="packageDate">Ngày giờ đóng gói</label>
+            <input
+              v-model="orderForm.package_date"
+              type="datetime-local"
+              id="packageDate"
+              required
+              class="input-field"
+            />
+          </div>
+
+          <h3 class="subsection-title">Thêm Sản Phẩm Vào Đơn</h3>
+
+          <div class="form-group">
+            <label for="barcodeInput">Quét/Nhập Barcode</label>
+            <input
+              v-model="barcodeInput"
+              type="text"
+              id="barcodeInput"
+              placeholder="Nhập hoặc quét mã barcode"
+              ref="barcodeInputRef"
+              @keyup.enter="addProductByBarcode"
+              class="input-field"
+            />
+          </div>
+
+          <div v-if="cartItems.length === 0" class="empty-cart">
+            Chưa có sản phẩm nào trong đơn hàng
+          </div>
+
+          <div v-else class="cart-items">
+            <div class="cart-item" v-for="(item, idx) in cartItems" :key="idx">
+              <div class="item-info">
+                <div class="item-name">{{ item.name }}</div>
+                <div class="item-details">
+                  {{ item.barcode }} | {{ item.brand }} | {{ item.category }}
+                </div>
+                <div class="item-available">Tồn: {{ item.available_total }}</div>
+                <div class="item-chips">
+                  <span
+                    v-for="al in item.allocations"
+                    :key="al.productID"
+                    class="chip chip-alloc"
+                  >
+                    {{ al.qty }} × {{ formatNumber(al.unit_cost) }}₫ (ID {{ al.productID }})
+                  </span>
+                </div>
+                <div class="item-cost">Tổng giá vốn: {{ formatNumber(itemTotalCost(item)) }}₫</div>
+              </div>
+
+              <div class="item-qty">
+                <button
+                  type="button"
+                  @click="decreaseQty(idx)"
+                  class="btn-qty"
+                  :disabled="item.qty_sold <= 1"
+                >
+                  −
+                </button>
+                <input
+                  v-model.number="item.qty_sold"
+                  type="number"
+                  min="1"
+                  :max="item.available_total"
+                  @change="refreshAllocationsForIndex(idx)"
+                  class="qty-input"
+                />
+                <button
+                  type="button"
+                  @click="increaseQty(idx)"
+                  class="btn-qty"
+                  :disabled="item.qty_sold >= item.available_total"
+                >
+                  +
+                </button>
+              </div>
+
+              <div class="item-total">
+                {{ formatNumber(itemTotalCost(item)) }}₫
+              </div>
+
               <button
                 type="button"
-                @click="increaseQty(idx)"
-                class="btn-qty"
-                :disabled="item.qty_sold >= item.available_total"
+                @click="removeItem(idx)"
+                class="btn-remove"
               >
-                +
+                ✕
               </button>
             </div>
 
-            <div class="item-total">
-              {{ formatNumber(itemTotalCost(item)) }}₫
+            <div class="order-summary">
+              <div class="summary-row">
+                <span class="summary-label">Tổng Chi Phí:</span>
+                <span class="summary-value">{{ formatNumber(totalCost) }}₫</span>
+              </div>
             </div>
+          </div>
 
+          <div class="form-actions">
             <button
               type="button"
-              @click="removeItem(idx)"
-              class="btn-remove"
+              @click="clearCart"
+              class="btn-secondary"
+              :disabled="cartItems.length === 0"
             >
-              ✕
+              🗑 Xóa Hết
+            </button>
+            <button
+              type="submit"
+              class="btn-submit"
+              :disabled="loading || cartItems.length === 0"
+            >
+              {{ loading ? 'Đang lưu...' : '✓ Hoàn Tất Đơn Hàng' }}
             </button>
           </div>
+        </form>
 
-          <div class="order-summary">
-            <div class="summary-row">
-              <span class="summary-label">Tổng Chi Phí:</span>
-              <span class="summary-value">{{ formatNumber(totalCost) }}₫</span>
-            </div>
-          </div>
+        <div v-if="message" :class="['message', message.type]">
+          {{ message.text }}
         </div>
+      </div>
 
-        <div class="form-actions">
+      <div class="history-section">
+        <div class="history-header">
+          <h2 class="section-title">📜 Lịch Sử Đơn Hàng</h2>
           <button
             type="button"
-            @click="clearCart"
-            class="btn-secondary"
-            :disabled="cartItems.length === 0"
+            class="btn-refresh"
+            @click="loadOrderHistory"
+            :disabled="historyLoading"
           >
-            🗑 Xóa Hết
-          </button>
-          <button
-            type="submit"
-            class="btn-submit"
-            :disabled="loading || cartItems.length === 0"
-          >
-            {{ loading ? 'Đang lưu...' : '✓ Hoàn Tất Đơn Hàng' }}
+            {{ historyLoading ? 'Đang tải...' : '⟳ Tải lại' }}
           </button>
         </div>
-      </form>
-
-      <div v-if="message" :class="['message', message.type]">
-        {{ message.text }}
-      </div>
-    </div>
-
-    <div class="history-section">
-      <div class="history-header">
-        <h2 class="section-title">📜 Lịch Sử Đơn Hàng</h2>
-        <button
-          type="button"
-          class="btn-refresh"
-          @click="loadOrderHistory"
-          :disabled="historyLoading"
-        >
-          {{ historyLoading ? 'Đang tải...' : '⟳ Tải lại' }}
-        </button>
-      </div>
-      <div class="history-filters">
-        <div class="filter-group">
-          <label>Mã vận đơn</label>
-          <input
-            v-model="filterOrderCode"
-            type="text"
-            class="filter-input"
-            placeholder="Nhập mã đơn"
-          />
-        </div>
-        <div class="filter-group">
-          <label>Mã sản phẩm</label>
-          <input
-            v-model="filterBarcode"
-            type="text"
-            class="filter-input"
-            placeholder="Barcode trong đơn"
-          />
-        </div>
-        <div class="filter-group">
-          <label>Từ ngày</label>
-          <input v-model="filterDateFrom" type="date" class="filter-input" />
-        </div>
-        <div class="filter-group">
-          <label>Đến ngày</label>
-          <input v-model="filterDateTo" type="date" class="filter-input" />
-        </div>
-        <div class="filter-actions">
-          <button type="button" class="btn-secondary small" @click="clearFilters">Xóa lọc</button>
-        </div>
-      </div>
-
-      <div v-if="historyLoading" class="history-empty">Đang tải dữ liệu đơn hàng...</div>
-      <div v-else-if="orderHistory.length === 0" class="history-empty">
-        Chưa có đơn hàng nào được tạo.
-      </div>
-      <div v-else class="history-list">
-        <div class="history-card" v-for="order in filteredOrders" :key="order.order_code">
-          <div class="history-card-main">
-            <div class="history-card-info">
-              <div class="history-order-code">{{ order.order_code || '(Không mã)' }}</div>
-              <div class="history-info-row">
-                <span>Khách: <strong>{{ order.customer_name || 'N/A' }}</strong></span>
-                <span>Ngày đóng gói: {{ order.package_date }}</span>
-                <span>Tổng chi phí: {{ formatNumber(order.total_cost) }}₫</span>
-              </div>
-            </div>
-            <div class="history-actions">
-              <button
-                type="button"
-                class="btn-return"
-                :disabled="isReturning(order.order_code) || isReturned(order.order_code) || orderProducts(order.order_code).length === 0"
-                @click="handleReturnOrder(order.order_code)"
-              >
-                {{
-                  isReturned(order.order_code)
-                    ? 'Đã trả'
-                    : isReturning(order.order_code)
-                      ? 'Đang trả...'
-                      : '↩ Trả hàng'
-                }}
-              </button>
-              <button
-                type="button"
-                class="btn-toggle"
-                @click="toggleOrderDetails(order.order_code)"
-              >
-                {{ isOrderExpanded(order.order_code) ? 'Thu gọn' : 'Xem sản phẩm' }}
-              </button>
-            </div>
+        <div class="history-filters">
+          <div class="filter-group">
+            <label>Sắp xếp</label>
+            <select v-model="sortOption" class="filter-input">
+              <option value="datetime">Thời gian (mới nhất)</option>
+              <option value="code">Mã vận đơn (A→Z)</option>
+            </select>
           </div>
+          <div class="filter-group">
+            <label>Mã vận đơn</label>
+            <input
+              v-model="filterOrderCode"
+              type="text"
+              class="filter-input"
+              placeholder="Nhập mã đơn"
+            />
+          </div>
+          <div class="filter-group">
+            <label>Mã sản phẩm</label>
+            <input
+              v-model="filterBarcode"
+              type="text"
+              class="filter-input"
+              placeholder="Barcode trong đơn"
+            />
+          </div>
+          <div class="filter-group">
+            <label>Từ ngày</label>
+            <input v-model="filterDateFrom" type="date" class="filter-input" />
+          </div>
+          <div class="filter-group">
+            <label>Đến ngày</label>
+            <input v-model="filterDateTo" type="date" class="filter-input" />
+          </div>
+          <div class="filter-actions">
+            <button type="button" class="btn-secondary small" @click="clearFilters">Xóa lọc</button>
+          </div>
+        </div>
 
-          <transition name="fade">
-            <div v-if="isOrderExpanded(order.order_code)" class="history-details">
-              <div v-if="orderProducts(order.order_code).length === 0" class="history-empty-products">
-                Chưa có sản phẩm nào được ghi lại cho đơn này.
-              </div>
-              <div v-else class="history-products">
-                <div
-                  class="history-product"
-                  v-for="item in orderProducts(order.order_code)"
-                  :key="`${order.order_code}-${item.productID}-${item.barcode}`"
-                >
-                  <div class="history-product-main">
-                    <div class="history-product-name">{{ item.name }}</div>
-                    <div class="history-product-meta">
-                      Barcode: {{ item.barcode }} | Thương hiệu: {{ item.brand }} | Danh mục:
-                      {{ item.category }}
-                    </div>
-                  </div>
-                  <div class="history-product-qty">
-                    {{ item.qty_sold }} × {{ formatNumber(item.unit_cost) }}₫
-                  </div>
-                  <div class="history-product-total">{{ formatNumber(item.total_cost) }}₫</div>
+        <div v-if="historyLoading" class="history-empty">Đang tải dữ liệu đơn hàng...</div>
+        <div v-else-if="orderHistory.length === 0" class="history-empty">
+          Chưa có đơn hàng nào được tạo.
+        </div>
+        <div v-else class="history-list">
+          <div class="history-card" v-for="order in sortedOrders" :key="order.order_code">
+            <div class="history-card-main">
+              <div class="history-card-info">
+                <div class="history-order-code">{{ order.order_code || '(Không mã)' }}</div>
+                <div class="history-info-row">
+                  <span>Khách: <strong>{{ order.customer_name || 'N/A' }}</strong></span>
+                  <span>Ngày đóng gói: {{ formatDateTimeDisplay(order.package_date) }}</span>
+                  <span>Tổng chi phí: {{ formatNumber(order.total_cost) }}₫</span>
                 </div>
               </div>
+              <div class="history-actions">
+                <button
+                  type="button"
+                  class="btn-return"
+                  :disabled="isReturning(order.order_code) || isReturned(order.order_code) || orderProducts(order.order_code).length === 0"
+                  @click="handleReturnOrder(order.order_code)"
+                >
+                  {{
+                    isReturned(order.order_code)
+                      ? 'Đã trả'
+                      : isReturning(order.order_code)
+                        ? 'Đang trả...'
+                        : '↩ Trả hàng'
+                  }}
+                </button>
+                <button
+                  type="button"
+                  class="btn-toggle"
+                  @click="toggleOrderDetails(order.order_code)"
+                >
+                  {{ isOrderExpanded(order.order_code) ? 'Thu gọn' : 'Xem sản phẩm' }}
+                </button>
+              </div>
             </div>
-          </transition>
+
+            <transition name="fade">
+              <div v-if="isOrderExpanded(order.order_code)" class="history-details">
+                <div v-if="orderProducts(order.order_code).length === 0" class="history-empty-products">
+                  Chưa có sản phẩm nào được ghi lại cho đơn này.
+                </div>
+                <div v-else class="history-products">
+                  <div
+                    class="history-product"
+                    v-for="item in orderProducts(order.order_code)"
+                    :key="`${order.order_code}-${item.productID}-${item.barcode}`"
+                  >
+                    <div class="history-product-main">
+                      <div class="history-product-name">{{ item.name }}</div>
+                      <div class="history-product-meta">
+                        Barcode: {{ item.barcode }} | Thương hiệu: {{ item.brand }} | Danh mục:
+                        {{ item.category }}
+                      </div>
+                    </div>
+                    <div class="history-product-qty">
+                      {{ item.qty_sold }} × {{ formatNumber(item.unit_cost) }}₫
+                    </div>
+                    <div class="history-product-total">{{ formatNumber(item.total_cost) }}₫</div>
+                  </div>
+                </div>
+              </div>
+            </transition>
+          </div>
         </div>
       </div>
     </div>
@@ -279,10 +288,37 @@ import { ref, computed, onMounted, nextTick } from 'vue';
 import { importsAPI, ordersAPI, soldAPI } from '../services/api';
 import { generateUniqueId } from '../services/api';
 
+function getLocalDateTimeString(date = new Date()) {
+  const tzOffset = date.getTimezoneOffset() * 60000;
+  const localISO = new Date(date.getTime() - tzOffset).toISOString();
+  return localISO.slice(0, 16);
+}
+
+function parseDateTimeValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return { timestamp: NaN, hasTime: false, day: NaN };
+  const timestamp = Date.parse(raw);
+  const hasTime = /T\d{2}:\d{2}/.test(raw) || /\d{1,2}:\d{2}/.test(raw);
+  if (Number.isNaN(timestamp)) {
+    return { timestamp: NaN, hasTime, day: NaN };
+  }
+  const dt = new Date(timestamp);
+  const day = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+  return { timestamp, hasTime, day };
+}
+
+function formatDateTimeDisplay(value) {
+  const ts = Date.parse(value);
+  if (Number.isNaN(ts)) return value || 'N/A';
+  return new Date(ts).toLocaleString('vi-VN', {
+    hour12: false,
+  });
+}
+
 const orderForm = ref({
   customer_name: '',
   order_code: '',
-  package_date: new Date().toISOString().split('T')[0],
+  package_date: getLocalDateTimeString(),
 });
 
 const barcodeInput = ref('');
@@ -302,6 +338,7 @@ const filterOrderCode = ref('');
 const filterBarcode = ref('');
 const filterDateFrom = ref('');
 const filterDateTo = ref('');
+const sortOption = ref('datetime');
 
 /**
  * Cập nhật cache imports.value theo danh sách updates (row 1-based, có header).
@@ -459,6 +496,36 @@ const filteredOrders = computed(() => {
     }
     return true;
   });
+});
+
+function compareOrdersByDateTime(a, b) {
+  const pa = parseDateTimeValue(a?.package_date);
+  const pb = parseDateTimeValue(b?.package_date);
+
+  if (!Number.isNaN(pb.day) || !Number.isNaN(pa.day)) {
+    if (Number.isNaN(pa.day)) return 1;
+    if (Number.isNaN(pb.day)) return -1;
+    if (pa.day !== pb.day) return pb.day - pa.day; // ngày mới nhất trước
+  }
+
+  if (pa.hasTime && !pb.hasTime) return -1;
+  if (!pa.hasTime && pb.hasTime) return 1;
+
+  if (!Number.isNaN(pa.timestamp) || !Number.isNaN(pb.timestamp)) {
+    if (Number.isNaN(pa.timestamp)) return 1;
+    if (Number.isNaN(pb.timestamp)) return -1;
+    return pb.timestamp - pa.timestamp; // cùng ngày: giờ mới trước
+  }
+
+  return 0;
+}
+
+const sortedOrders = computed(() => {
+  const list = [...filteredOrders.value];
+  if (sortOption.value === 'code') {
+    return list.sort((a, b) => String(a.order_code || '').localeCompare(String(b.order_code || '')));
+  }
+  return list.sort(compareOrdersByDateTime);
 });
 
 function clearFilters() {
@@ -713,7 +780,7 @@ async function submitOrder() {
     orderForm.value = {
       customer_name: '',
       order_code: '',
-      package_date: new Date().toISOString().split('T')[0],
+      package_date: getLocalDateTimeString(),
     };
     cartItems.value = [];
     await loadOrderHistory();
@@ -833,11 +900,18 @@ onMounted(() => {
 <style scoped>
 .orders-container {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 16px 24px;
   background: #fafaf9;
   min-height: 100vh;
+}
+
+.orders-layout {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 16px;
+  align-items: flex-start;
 }
 
 .page-title {
@@ -1169,11 +1243,14 @@ label {
 }
 
 .history-section {
-  margin-top: 24px;
+  margin-top: 0;
   background: white;
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .history-header {
@@ -1252,6 +1329,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-top: 4px;
 }
 
 .history-card {
@@ -1390,6 +1468,10 @@ label {
 }
 
 @media (max-width: 768px) {
+  .orders-layout {
+    grid-template-columns: 1fr;
+  }
+
   .form-row {
     grid-template-columns: 1fr;
   }

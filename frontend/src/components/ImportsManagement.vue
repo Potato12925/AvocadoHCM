@@ -275,7 +275,14 @@
           <div class="modal-row">
             <div class="modal-group">
               <label>Giá Hòa Vốn (₫)</label>
-              <input v-model.number="editForm.break_even_price" type="number" step="0.01" min="0" class="input-field" />
+              <input
+                v-model.number="editForm.break_even_price"
+                type="number"
+                step="0.01"
+                min="0"
+                class="readonly-field"
+                :readonly="true"
+              />
             </div>
             <div class="modal-group">
               <label>Ngày Nhập</label>
@@ -299,7 +306,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { importsAPI, productsAPI } from '../services/api';
 
 const pendingItems = ref([]);
@@ -325,6 +332,15 @@ const editForm = ref({
 });
 const isEditModalOpen = ref(false);
 const barcodeInput = ref(null);
+
+watch(
+  () => editForm.value.unit_cost,
+  (val) => {
+    const unitCost = Number(val) || 0;
+    editForm.value.unit_cost = unitCost;
+    editForm.value.break_even_price = unitCost > 0 ? +(unitCost / 0.7).toFixed(2) : 0;
+  }
+);
 
 const filteredImports = computed(() => {
   const query = (searchQuery.value || '').trim().toLowerCase();
