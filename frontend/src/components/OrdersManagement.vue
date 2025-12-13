@@ -25,15 +25,25 @@
             </div>
             <div class="form-group">
               <label for="orderCode">Mã Vận Đơn</label>
-              <input
-                v-model="orderForm.order_code"
-                type="text"
-                id="orderCode"
-                placeholder="Để trống để tự sinh"
-                ref="orderCodeRef"
-                @keyup.enter="focusBarcode"
-                class="input-field"
-              />
+              <div class="input-with-action">
+                <input
+                  v-model="orderForm.order_code"
+                  type="text"
+                  id="orderCode"
+                  placeholder="Để trống để tự sinh"
+                  ref="orderCodeRef"
+                  @keyup.enter="focusBarcode"
+                  class="input-field"
+                />
+                <button
+                  type="button"
+                  class="btn-scan"
+                  @click="startOrderCodeScanner"
+                  :disabled="isScanningOrderCode"
+                >
+                  📷 Quét QR
+                </button>
+              </div>
             </div>
           </div>
 
@@ -281,10 +291,32 @@
       </div>
     </div>
   </div>
+
+  <transition name="fade">
+    <div v-if="isScanningOrderCode" class="scanner-overlay">
+      <div class="scanner-modal">
+        <div class="scanner-header">
+          <div class="scanner-title">Quét mã vận đơn (QR)</div>
+          <button type="button" class="scanner-close" @click="stopOrderCodeScanner">✕</button>
+        </div>
+        <div class="scanner-body">
+          <div class="scanner-content">
+            <video ref="orderCodeVideoRef" class="scanner-video" autoplay muted playsinline></video>
+            <div class="scanner-status">{{ orderCodeScannerStatus || 'Đang quét...' }}</div>
+            <div v-if="orderCodeScannerError" class="scanner-error">{{ orderCodeScannerError }}</div>
+          </div>
+        </div>
+        <div class="scanner-footer">
+          <button type="button" class="btn-secondary" @click="stopOrderCodeScanner">Đóng</button>
+        </div>
+      </div>
+    </div>
+  </transition>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import jsQR from 'jsqr';
 import { importsAPI, ordersAPI, soldAPI } from '../services/api';
 import { generateUniqueId } from '../services/api';
 
@@ -339,6 +371,23 @@ const filterBarcode = ref('');
 const filterDateFrom = ref('');
 const filterDateTo = ref('');
 const sortOption = ref('datetime');
+const isScanningOrderCode = ref(false);
+const orderCodeVideoRef = ref(null);
+const orderCodeScannerError = ref('');
+const orderCodeScannerStatus = ref('');
+const ORDER_CODE_VIDEO_CONSTRAINTS = {
+  video: {
+    facingMode: { ideal: 'environment' },
+    advanced: [
+      // Gợi ý autofocus nếu webcam hỗ trợ
+      { focusMode: 'continuous' },
+    ],
+  },
+};
+let orderCodeStream = null;
+let orderCodeScanHandle = 0;
+let jsqrCanvas = null;
+let jsqrCtx = null;
 
 /**
  * Cập nhật cache imports.value theo danh sách updates (row 1-based, có header).
@@ -673,6 +722,143 @@ function focusOrderCode() {
   }
 }
 
+function resetOrderCodeScanner() {
+  if (orderCodeScanHandle) {
+    cancelAnimationFrame(orderCodeScanHandle);
+    orderCodeScanHandle = 0;
+  }
+  if (orderCodeStream) {
+    orderCodeStream.getTracks().forEach((t) => t.stop());
+    orderCodeStream = null;
+  }
+  if (orderCodeVideoRef.value) {
+    orderCodeVideoRef.value.srcObject = null;
+  }
+  orderCodeScannerStatus.value = '';
+  orderCodeScannerError.value = '';
+}
+
+function stopOrderCodeScanner() {
+  resetOrderCodeScanner();
+  isScanningOrderCode.value = false;
+}
+
+function prepareJsqrCanvas(videoEl) {
+  if (!jsqrCanvas) jsqrCanvas = document.createElement('canvas');
+  if (!jsqrCtx) jsqrCtx = jsqrCanvas.getContext('2d');
+  if (!jsqrCtx) return { width: 0, height: 0 };
+
+  const width = videoEl.videoWidth || videoEl.clientWidth || 0;
+  const height = videoEl.videoHeight || videoEl.clientHeight || 0;
+  if (width && height) {
+    jsqrCanvas.width = width;
+    jsqrCanvas.height = height;
+  }
+  return { width, height };
+}
+
+function detectWithJsqr() {
+  const videoEl = orderCodeVideoRef.value;
+  if (!videoEl) return '';
+  const { width, height } = prepareJsqrCanvas(videoEl);
+  if (!width || !height || !jsqrCtx) return '';
+  jsqrCtx.drawImage(videoEl, 0, 0, width, height);
+  const imageData = jsqrCtx.getImageData(0, 0, width, height);
+  const result = jsQR(imageData.data, width, height);
+  return result?.data || '';
+}
+
+async function tryImproveFocus() {
+  if (!orderCodeStream || typeof navigator === 'undefined') return;
+  const track = orderCodeStream.getVideoTracks()?.[0];
+  if (!track || !track.getCapabilities || !track.applyConstraints) return;
+
+  const caps = track.getCapabilities();
+  const constraint = {};
+
+  if (Array.isArray(caps.focusMode)) {
+    if (caps.focusMode.includes('continuous')) {
+      constraint.focusMode = 'continuous';
+    } else if (caps.focusMode.includes('single-shot')) {
+      constraint.focusMode = 'single-shot';
+    }
+  }
+
+  if (caps.focusDistance && typeof caps.focusDistance.min === 'number') {
+    constraint.focusDistance = caps.focusDistance.min;
+  }
+
+  if (caps.zoom && typeof caps.zoom.max === 'number') {
+    const targetZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min || 1, 1.5));
+    if (!Number.isNaN(targetZoom)) {
+      constraint.zoom = targetZoom;
+    }
+  }
+
+  if (Object.keys(constraint).length === 0) return;
+  try {
+    await track.applyConstraints({ advanced: [constraint] });
+  } catch (err) {
+    console.warn('applyConstraints focus/zoom failed:', err);
+  }
+}
+
+async function scanOrderCodeFrame() {
+  if (!isScanningOrderCode.value || !orderCodeVideoRef.value) return;
+  try {
+    const value = detectWithJsqr();
+    orderCodeScannerStatus.value = 'Đang quét (jsQR)...';
+
+    if (value) {
+      orderForm.value.order_code = value;
+      showMessage('Đã quét mã vận đơn', 'success');
+      stopOrderCodeScanner();
+      await nextTick();
+      focusBarcode();
+      return;
+    }
+  } catch (error) {
+    console.error('Barcode detect error:', error);
+    orderCodeScannerError.value = error?.message || 'Không thể quét mã.';
+    stopOrderCodeScanner();
+    return;
+  }
+  orderCodeScanHandle = requestAnimationFrame(scanOrderCodeFrame);
+}
+
+async function startOrderCodeScanner() {
+  resetOrderCodeScanner();
+  orderCodeScannerError.value = '';
+  orderCodeScannerStatus.value = 'Đang mở camera...';
+  isScanningOrderCode.value = true;
+  await nextTick();
+
+  try {
+    if (!jsQR) {
+      throw new Error('Không tải được thư viện jsQR để quét QR.');
+    }
+
+    orderCodeStream = await navigator.mediaDevices.getUserMedia(ORDER_CODE_VIDEO_CONSTRAINTS);
+    const videoEl = orderCodeVideoRef.value;
+    if (!videoEl) throw new Error('Không tìm thấy camera.');
+    videoEl.srcObject = orderCodeStream;
+    await videoEl.play();
+
+    const { width, height } = prepareJsqrCanvas(videoEl);
+    if (!width || !height) {
+      throw new Error('Không lấy được khung hình từ camera để quét QR.');
+    }
+
+    orderCodeScannerStatus.value = 'Đưa mã QR vào khung hình (jsQR, đang cố lấy nét)...';
+    await tryImproveFocus();
+    orderCodeScanHandle = requestAnimationFrame(scanOrderCodeFrame);
+  } catch (error) {
+    console.error('Start scanner error:', error);
+    orderCodeScannerError.value = error?.message || 'Không mở được camera.';
+    orderCodeScannerStatus.value = '';
+  }
+}
+
 async function handleCtrlEnter() {
   await submitOrder();
   await nextTick();
@@ -895,6 +1081,10 @@ onMounted(() => {
   loadImports();
   loadOrderHistory();
 });
+
+onBeforeUnmount(() => {
+  stopOrderCodeScanner();
+});
 </script>
 
 <style scoped>
@@ -982,6 +1172,34 @@ label {
   outline: none;
   border-color: #86c06b;
   box-shadow: 0 0 0 3px rgba(134, 192, 107, 0.1);
+}
+
+.input-with-action {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-scan {
+  padding: 10px 12px;
+  border: 1px solid #86c06b;
+  background: #ecfdf3;
+  color: #166534;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  min-width: 110px;
+  transition: all 0.2s;
+}
+
+.btn-scan:hover:not(:disabled) {
+  background: #d1f7df;
+}
+
+.btn-scan:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .empty-cart {
@@ -1465,6 +1683,90 @@ label {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 2000;
+}
+
+.scanner-modal {
+  background: #fff;
+  width: 100%;
+  max-width: 520px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.scanner-title {
+  font-weight: 700;
+  color: #14532d;
+}
+
+.scanner-close {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.scanner-body {
+  padding: 16px;
+}
+
+.scanner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scanner-video {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: #0f172a;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.scanner-status {
+  font-size: 14px;
+  color: #374151;
+  text-align: center;
+}
+
+.scanner-error {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  font-size: 13px;
+  text-align: center;
+}
+
+.scanner-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
 }
 
 @media (max-width: 768px) {
