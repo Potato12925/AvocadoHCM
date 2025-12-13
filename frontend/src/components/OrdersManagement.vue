@@ -378,6 +378,10 @@ const orderCodeScannerStatus = ref('');
 const ORDER_CODE_VIDEO_CONSTRAINTS = {
   video: {
     facingMode: { ideal: 'environment' },
+    advanced: [
+      // Gợi ý autofocus nếu webcam hỗ trợ
+      { focusMode: 'continuous' },
+    ],
   },
 };
 let orderCodeStream = null;
@@ -764,6 +768,41 @@ function detectWithJsqr() {
   return result?.data || '';
 }
 
+async function tryImproveFocus() {
+  if (!orderCodeStream || typeof navigator === 'undefined') return;
+  const track = orderCodeStream.getVideoTracks()?.[0];
+  if (!track || !track.getCapabilities || !track.applyConstraints) return;
+
+  const caps = track.getCapabilities();
+  const constraint = {};
+
+  if (Array.isArray(caps.focusMode)) {
+    if (caps.focusMode.includes('continuous')) {
+      constraint.focusMode = 'continuous';
+    } else if (caps.focusMode.includes('single-shot')) {
+      constraint.focusMode = 'single-shot';
+    }
+  }
+
+  if (caps.focusDistance && typeof caps.focusDistance.min === 'number') {
+    constraint.focusDistance = caps.focusDistance.min;
+  }
+
+  if (caps.zoom && typeof caps.zoom.max === 'number') {
+    const targetZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min || 1, 1.5));
+    if (!Number.isNaN(targetZoom)) {
+      constraint.zoom = targetZoom;
+    }
+  }
+
+  if (Object.keys(constraint).length === 0) return;
+  try {
+    await track.applyConstraints({ advanced: [constraint] });
+  } catch (err) {
+    console.warn('applyConstraints focus/zoom failed:', err);
+  }
+}
+
 async function scanOrderCodeFrame() {
   if (!isScanningOrderCode.value || !orderCodeVideoRef.value) return;
   try {
@@ -810,7 +849,8 @@ async function startOrderCodeScanner() {
       throw new Error('Không lấy được khung hình từ camera để quét QR.');
     }
 
-    orderCodeScannerStatus.value = 'Đưa mã QR vào khung hình (jsQR)...';
+    orderCodeScannerStatus.value = 'Đưa mã QR vào khung hình (jsQR, đang cố lấy nét)...';
+    await tryImproveFocus();
     orderCodeScanHandle = requestAnimationFrame(scanOrderCodeFrame);
   } catch (error) {
     console.error('Start scanner error:', error);
