@@ -90,7 +90,6 @@
                 {{ option.barcode }} - {{ option.brand }} {{ option.name }} ({{ option.category || 'Chưa phân loại' }})
               </option>
             </select>
-            <p class="helper-text">Các trường bên dưới sẽ được điền dựa trên sản phẩm đã chọn.</p>
           </div>
         </div>
         <div class="modal-row">
@@ -100,7 +99,31 @@
           </div>
           <div class="modal-group">
             <label for="pm-brand">Hãng</label>
-            <input id="pm-brand" name="brand" class="input-field" v-model="form.brand" />
+            <div class="brand-stack" @click.stop>
+              <div class="brand-input-row">
+                <input
+                  id="pm-brand"
+                  name="brand"
+                  class="input-field"
+                  v-model="form.brand"
+                  @input="onBrandInput"
+                  placeholder="Nhập hoặc chọn hãng"
+                />
+                <button
+                  type="button"
+                  class="btn-brand-dropdown"
+                  @click="toggleBrandDropdown"
+                  :disabled="!brandOptions.length"
+                >
+                  ▼
+                </button>
+              </div>
+              <ul v-if="brandDropdownOpen && brandOptions.length" class="brand-dropdown">
+                <li v-for="brand in brandOptions" :key="brand" @click="selectBrand(brand)">
+                  {{ brand }}
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
         <div class="modal-row">
@@ -134,7 +157,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { productsAPI, importsAPI } from '../services/api';
 
 const products = ref([]); // mảng rows [barcode, hãng, tên, phân loại, đã đăng]
@@ -146,9 +169,14 @@ const isEditing = ref(false);
 const saving = ref(false);
 const editBarcodeRef = ref('');
 const selectedTemplateIdx = ref('');
+const brandDropdownOpen = ref(false);
 const errorMessage = ref('');
 const form = ref({ barcode: '', brand: '', name: '', category: '', published: '' });
 const collator = new Intl.Collator('vi', { sensitivity: 'base', usage: 'sort' });
+
+function formatBrandValue(value) {
+  return String(value || '').trim().toUpperCase();
+}
 
 // Bản đồ tồn kho theo barcode, lấy từ bảng Imports (cộng dồn available_qty)
 const stockByBarcode = computed(() => {
@@ -171,7 +199,7 @@ const groupedProducts = computed(() => {
   const map = new Map();
   for (const row of products.value || []) {
     const barcode = (row?.[0] || '').toString();
-    const brand = row?.[1] || '';
+    const brand = formatBrandValue(row?.[1]);
     const name = row?.[2] || '';
     const category = row?.[3] || '';
     const publishedRaw = row?.[4] || '';
@@ -197,11 +225,20 @@ const templateOptions = computed(() => {
     .map((row, idx) => ({
       idx,
       barcode: (row?.[0] || '').toString(),
-      brand: row?.[1] || '',
+      brand: formatBrandValue(row?.[1]),
       name: row?.[2] || '',
       category: row?.[3] || '',
     }))
     .filter((option) => option.barcode || option.name);
+});
+
+const brandOptions = computed(() => {
+  const set = new Set();
+  for (const item of groupedProducts.value || []) {
+    const brand = formatBrandValue(item?.[1]);
+    if (brand) set.add(brand);
+  }
+  return Array.from(set).sort((a, b) => collator.compare(a, b));
 });
 
 const filteredProducts = computed(() => {
@@ -245,6 +282,11 @@ async function loadProducts() {
 
 onMounted(() => {
   loadProducts();
+  document.addEventListener('click', closeBrandDropdown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeBrandDropdown);
 });
 
 function openAddModal() {
@@ -253,6 +295,7 @@ function openAddModal() {
   selectedTemplateIdx.value = '';
   errorMessage.value = '';
   form.value = { barcode: '', brand: '', name: '', category: '', published: '' };
+  brandDropdownOpen.value = false;
   modalOpen.value = true;
   console.log(modalOpen.value)
 }
@@ -261,13 +304,15 @@ function openEditModal(item) {
   isEditing.value = true;
   selectedTemplateIdx.value = '';
   errorMessage.value = '';
+  const normalizedBrand = formatBrandValue(item[1] || '');
   form.value = {
     barcode: item[0] || '',
-    brand: item[1] || '',
+    brand: normalizedBrand,
     name: item[2] || '',
     category: item[3] || '',
     published: item[4] === '1' ? '1' : '',
   };
+  brandDropdownOpen.value = false;
   editBarcodeRef.value = form.value.barcode;
   modalOpen.value = true;
 }
@@ -277,6 +322,7 @@ function closeModal() {
   saving.value = false;
   selectedTemplateIdx.value = '';
   errorMessage.value = '';
+  brandDropdownOpen.value = false;
 }
 
 watch(selectedTemplateIdx, (val) => {
@@ -288,12 +334,30 @@ watch(selectedTemplateIdx, (val) => {
   if (!row) return;
   form.value = {
     barcode: row[0] || '',
-    brand: row[1] || '',
+    brand: formatBrandValue(row[1]),
     name: row[2] || '',
     category: row[3] || '',
     published: String(row[4] || '').trim() === '1' ? '1' : '',
   };
 });
+
+function onBrandInput() {
+  form.value.brand = formatBrandValue(form.value.brand);
+}
+
+function toggleBrandDropdown() {
+  if (!brandOptions.value.length) return;
+  brandDropdownOpen.value = !brandDropdownOpen.value;
+}
+
+function selectBrand(brand) {
+  form.value.brand = formatBrandValue(brand);
+  brandDropdownOpen.value = false;
+}
+
+function closeBrandDropdown() {
+  brandDropdownOpen.value = false;
+}
 
 async function saveProduct() {
   try {
@@ -316,6 +380,7 @@ async function saveProduct() {
       }
     }
 
+    form.value.brand = formatBrandValue(form.value.brand);
     const payload = {
       barcode,
       'hãng': form.value.brand || '',
@@ -688,6 +753,60 @@ async function deleteByBarcode(barcode) {
   font-size: 12px;
   color: #6b7280;
   margin: 4px 0 0;
+}
+
+.brand-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+.brand-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-brand-dropdown {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #f3f4f6;
+  cursor: pointer;
+  min-width: 44px;
+}
+
+.btn-brand-dropdown:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.brand-dropdown {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+  z-index: 20;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+}
+
+.brand-dropdown li {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.brand-dropdown li:hover {
+  background: #f3f4f6;
 }
 
 .alert {

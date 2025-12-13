@@ -55,7 +55,17 @@
                 <td>{{ idx + 1 }}</td>
                 <td>{{ item.barcode }}</td>
                 <td>{{ item.name }}</td>
-                <td>{{ item.brand }}</td>
+                <td>
+                  <input
+                    v-model="item.brand"
+                    type="text"
+                    list="brand-options"
+                    placeholder="Chọn hoặc nhập hãng"
+                    class="input-field inline-input"
+                    :disabled="loading"
+                    @input="handleBrandInput(item)"
+                  />
+                </td>
                 <td>{{ item.category }}</td>
                 <td>
                   <input
@@ -114,6 +124,9 @@
               </tr>
             </tbody>
           </table>
+          <datalist id="brand-options">
+            <option v-for="brand in availableBrands" :key="brand" :value="brand" />
+          </datalist>
         </div>
         <div v-else class="pending-empty">
           Chưa có sản phẩm trong lô nhập. Quét barcode để bắt đầu.
@@ -365,6 +378,21 @@ const productsHeader = ref([]);
 const productsData = ref([]);
 const productsReady = ref(false);
 
+const availableBrands = computed(() => {
+  const idx = headerIndex('hãng');
+  if (idx < 0) return [];
+  const seen = new Set();
+  const list = [];
+  for (const row of productsData.value || []) {
+    const brand = formatBrand(row && row[idx]);
+    if (brand && !seen.has(brand)) {
+      seen.add(brand);
+      list.push(brand);
+    }
+  }
+  return list.sort((a, b) => a.localeCompare(b));
+});
+
 function headerIndex(name) {
   if (!productsHeader.value || productsHeader.value.length === 0) return -1;
   const lower = name.toLowerCase();
@@ -423,7 +451,7 @@ function focusBarcodeInput() {
 function createPendingItemFromRow(row) {
   return {
     barcode: getCell(row, 'barcode').trim(),
-    brand: getCell(row, 'hãng').trim(),
+    brand: formatBrand(getCell(row, 'hãng')),
     name: getCell(row, 'tên').trim(),
     category: getCell(row, 'phân loại').trim(),
     qty_in: 1,
@@ -478,6 +506,10 @@ function handleUnitCostChange(item) {
 
 function markCustomBreakEven(item) {
   item.hasCustomBreakEven = true;
+}
+
+function handleBrandInput(item) {
+  item.brand = formatBrand(item.brand);
 }
 
 function removePendingItem(barcode) {
@@ -550,6 +582,10 @@ function toISODateFromVN(d) {
     return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
   }
   return d;
+}
+
+function formatBrand(value) {
+  return String(value || '').trim().toUpperCase();
 }
 
 function resetForm() {
