@@ -636,12 +636,12 @@ function getBatchesForBarcode(barcode) {
     const importDate = parseImportDate(row?.[8]);
     batches.push({ row, productID, unitCost, available, importDate });
   }
-  // Sort by import date asc (FIFO). Invalid dates are pushed to the end.
+  // Sort by import date desc (newest first). Invalid dates are pushed to the end.
   batches.sort((a, b) => {
     if (a.importDate === b.importDate) return 0;
     if (a.importDate === Number.POSITIVE_INFINITY) return 1;
     if (b.importDate === Number.POSITIVE_INFINITY) return -1;
-    return a.importDate - b.importDate;
+    return b.importDate - a.importDate;
   });
   return batches;
 }
@@ -668,6 +668,7 @@ function addProductByBarcode() {
 
   const barcode = barcodeInput.value.trim();
   const batches = getBatchesForBarcode(barcode);
+  console.log("batches : ",batches);
   if (batches.length === 0) {
     showMessage('Không tìm thấy sản phẩm với mã barcode này', 'error');
     barcodeInput.value = '';
