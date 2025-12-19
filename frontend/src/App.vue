@@ -1,20 +1,11 @@
 <script setup>
-import { ref } from 'vue';
-import ImportsManagement from './components/ImportsManagement.vue';
-import ProductsManagement from './components/ProductsManagement.vue';
-import OrdersManagement from './components/OrdersManagement.vue';
-import SoldManagement from './components/SoldManagement.vue';
-import ExpensesManagement from './components/ExpensesManagement.vue';
-
-const currentPage = ref('imports');
-
-const pages = {
-  imports: { name: 'Nhập Hàng', icon: '📦', component: ImportsManagement },
-  products: { name: 'Sản Phẩm', icon: '📦', component: ProductsManagement },
-  orders: { name: 'Tạo Đơn', icon: '🛒', component: OrdersManagement },
-  sold: { name: 'Đã Bán', icon: '📊', component: SoldManagement },
-  expenses: { name: 'Chi Tiêu', icon: '💰', component: ExpensesManagement },
-};
+const pages = [
+  { name: 'Nhập Hàng', icon: '📦', path: '/import' },
+  { name: 'Sản Phẩm', icon: '📦', path: '/product' },
+  { name: 'Tạo Đơn', icon: '🛒', path: '/order' },
+  { name: 'Đã Bán', icon: '📊', path: '/sold' },
+  { name: 'Chi Tiêu', icon: '💰', path: '/expense' },
+];
 </script>
 
 <template>
@@ -22,27 +13,28 @@ const pages = {
     <!-- Header -->
     <header class="app-header">
       <div class="header-content">
-        <h1 class="app-title">🥑 AvocadoShop</h1>
+        <h1 class="app-title">AvocadoShop</h1>
         <p class="app-subtitle">Quản Lý Cửa Hàng Mỹ Phẩm</p>
       </div>
     </header>
 
     <!-- Navigation -->
     <nav class="app-nav">
-      <button
-        v-for="(page, key) in pages"
-        :key="key"
-        @click="currentPage = key"
-        :class="['nav-btn', { active: currentPage === key }]"
+      <router-link
+        v-for="page in pages"
+        :key="page.path"
+        :to="page.path"
+        class="nav-btn"
+        active-class="active"
       >
         <span class="nav-icon">{{ page.icon }}</span>
         <span class="nav-label">{{ page.name }}</span>
-      </button>
+      </router-link>
     </nav>
 
     <!-- Main Content -->
     <main class="app-main">
-      <component :is="pages[currentPage].component" />
+      <router-view />
     </main>
 
     <!-- Footer -->
@@ -129,6 +121,7 @@ body,
   transition: all 0.3s;
   font-family: inherit;
   color: #666;
+  text-decoration: none;
 }
 
 .nav-btn:hover {

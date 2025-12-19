@@ -1,7 +1,8 @@
 import { createApp } from 'vue'
 import App from './App.vue'
+import router from './router'
 
-createApp(App).mount('#app')
+createApp(App).use(router).mount('#app')
 
 // Dev-only: trace window.print() and optionally block Ctrl+P for debugging
 if (import.meta && import.meta.env && import.meta.env.DEV) {
