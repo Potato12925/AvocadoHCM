@@ -46,14 +46,33 @@
               </div>
             </div>
           </div>
-
           <div class="form-group">
-            <label for="packageDate">Ngày giờ đóng gói</label>
+            <label for="packageDate">Ngày giờ</label>
+            <div class="input-with-action">
+              <button
+                type="button"
+                class="btn-secondary"
+                :class="{ 'btn-active': packageDateMode === 'now' }"
+                @click="setPackageDateNow"
+              >
+                Hiện tại
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                :class="{ 'btn-active': packageDateMode === 'custom' }"
+                @click="togglePackageDatePicker"
+              >
+                {{ showPackageDatePicker ? 'Ẩn chọn ngày' : 'Chọn ngày' }}
+              </button>
+            </div>
             <input
+              v-if="showPackageDatePicker"
               v-model="orderForm.package_date"
               type="datetime-local"
               id="packageDate"
               required
+              @input="packageDateTouched = true"
               class="input-field"
             />
           </div>
@@ -347,12 +366,16 @@ function formatDateTimeDisplay(value) {
   });
 }
 
+
 const orderForm = ref({
   customer_name: '',
   order_code: '',
   package_date: getLocalDateTimeString(),
 });
 
+const packageDateTouched = ref(false);
+const showPackageDatePicker = ref(false);
+const packageDateMode = ref('now');
 const barcodeInput = ref('');
 const orderCodeRef = ref(null);
 const barcodeInputRef = ref(null);
@@ -904,6 +927,20 @@ function clearCart() {
   }
 }
 
+function setPackageDateNow() {
+  orderForm.value.package_date = getLocalDateTimeString();
+  packageDateTouched.value = true;
+  packageDateMode.value = 'now';
+  showPackageDatePicker.value = false;
+}
+
+function togglePackageDatePicker() {
+  showPackageDatePicker.value = !showPackageDatePicker.value;
+  if (showPackageDatePicker.value) {
+    packageDateMode.value = 'custom';
+  }
+}
+
 async function submitOrder() {
   if (loading.value) return;
   if (cartItems.value.length === 0) {
@@ -911,8 +948,18 @@ async function submitOrder() {
     return;
   }
 
+
+  if (!packageDateTouched.value || !orderForm.value.package_date) {
+
+    orderForm.value.package_date = getLocalDateTimeString();
+
+  }
+
+
   loading.value = true;
+
   try {
+
     const orderID = generateUniqueId();
     const inputOrderCode = (orderForm.value.order_code || '').trim();
     const orderCode = inputOrderCode || `ORD-${Date.now()}`;
@@ -963,13 +1010,19 @@ async function submitOrder() {
       applyLocalImportUpdates(updates);
     }
 
-    showMessage(`Tạo đơn hàng thành công! Mã: ${orderCode}`, 'success');
+    showMessage(`Tạo đơnn hàng thành công! Mã: ${orderCode}`, 'success');
     orderForm.value = {
       customer_name: '',
       order_code: '',
       package_date: getLocalDateTimeString(),
     };
+    packageDateTouched.value = false;
+    showPackageDatePicker.value = false;
+    packageDateMode.value = 'now';
+    barcodeInput.value = '';
     cartItems.value = [];
+
+
     await loadOrderHistory();
   } catch (error) {
     showMessage('Lỗi: ' + error.message, 'error');
@@ -1430,6 +1483,12 @@ label {
   background: #f3f4f6;
   border: 1px solid #ddd;
   color: #555;
+}
+
+.btn-secondary.btn-active {
+  background: #d1f7df;
+  border-color: #86c06b;
+  color: #166534;
 }
 
 .btn-secondary:hover:not(:disabled) {
