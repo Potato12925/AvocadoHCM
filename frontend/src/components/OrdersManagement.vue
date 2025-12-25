@@ -197,126 +197,18 @@
         </div>
       </div>
 
-      <div class="history-section">
-        <div class="history-header">
-          <h2 class="section-title">📜 Lịch Sử Đơn Hàng</h2>
-          <button
-            type="button"
-            class="btn-refresh"
-            @click="loadOrderHistory"
-            :disabled="historyLoading"
-          >
-            {{ historyLoading ? 'Đang tải...' : '⟳ Tải lại' }}
-          </button>
-        </div>
-        <div class="history-filters">
-          <div class="filter-group">
-            <label>Sắp xếp</label>
-            <select v-model="sortOption" class="filter-input">
-              <option value="datetime">Thời gian (mới nhất)</option>
-              <option value="code">Mã vận đơn (A→Z)</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Mã vận đơn</label>
-            <input
-              v-model="filterOrderCode"
-              type="text"
-              class="filter-input"
-              placeholder="Nhập mã đơn"
-            />
-          </div>
-          <div class="filter-group">
-            <label>Mã sản phẩm</label>
-            <input
-              v-model="filterBarcode"
-              type="text"
-              class="filter-input"
-              placeholder="Barcode trong đơn"
-            />
-          </div>
-          <div class="filter-group">
-            <label>Từ ngày</label>
-            <input v-model="filterDateFrom" type="date" class="filter-input" />
-          </div>
-          <div class="filter-group">
-            <label>Đến ngày</label>
-            <input v-model="filterDateTo" type="date" class="filter-input" />
-          </div>
-          <div class="filter-actions">
-            <button type="button" class="btn-secondary small" @click="clearFilters">Xóa lọc</button>
-          </div>
-        </div>
-
-        <div v-if="historyLoading" class="history-empty">Đang tải dữ liệu đơn hàng...</div>
-        <div v-else-if="orderHistory.length === 0" class="history-empty">
-          Chưa có đơn hàng nào được tạo.
-        </div>
-        <div v-else class="history-list">
-          <div class="history-card" v-for="order in sortedOrders" :key="order.order_code">
-            <div class="history-card-main">
-              <div class="history-card-info">
-                <div class="history-order-code">{{ order.order_code || '(Không mã)' }}</div>
-                <div class="history-info-row">
-                  <span>Khách: <strong>{{ order.customer_name || 'N/A' }}</strong></span>
-                  <span>Ngày đóng gói: {{ formatDateTimeDisplay(order.package_date) }}</span>
-                  <span>Tổng chi phí: {{ formatNumber(order.total_cost) }}₫</span>
-                </div>
-              </div>
-              <div class="history-actions">
-                <button
-                  type="button"
-                  class="btn-return"
-                  :disabled="isReturning(order.order_code) || isReturned(order.order_code) || orderProducts(order.order_code).length === 0"
-                  @click="handleReturnOrder(order.order_code)"
-                >
-                  {{
-                    isReturned(order.order_code)
-                      ? 'Đã trả'
-                      : isReturning(order.order_code)
-                        ? 'Đang trả...'
-                        : '↩ Trả hàng'
-                  }}
-                </button>
-                <button
-                  type="button"
-                  class="btn-toggle"
-                  @click="toggleOrderDetails(order.order_code)"
-                >
-                  {{ isOrderExpanded(order.order_code) ? 'Thu gọn' : 'Xem sản phẩm' }}
-                </button>
-              </div>
-            </div>
-
-            <transition name="fade">
-              <div v-if="isOrderExpanded(order.order_code)" class="history-details">
-                <div v-if="orderProducts(order.order_code).length === 0" class="history-empty-products">
-                  Chưa có sản phẩm nào được ghi lại cho đơn này.
-                </div>
-                <div v-else class="history-products">
-                  <div
-                    class="history-product"
-                    v-for="item in orderProducts(order.order_code)"
-                    :key="`${order.order_code}-${item.productID}-${item.barcode}`"
-                  >
-                    <div class="history-product-main">
-                      <div class="history-product-name">{{ item.name }}</div>
-                      <div class="history-product-meta">
-                        Barcode: {{ item.barcode }} | Thương hiệu: {{ item.brand }} | Danh mục:
-                        {{ item.category }}
-                      </div>
-                    </div>
-                    <div class="history-product-qty">
-                      {{ item.qty_sold }} × {{ formatNumber(item.unit_cost) }}₫
-                    </div>
-                    <div class="history-product-total">{{ formatNumber(item.total_cost) }}₫</div>
-                  </div>
-                </div>
-              </div>
-            </transition>
-          </div>
-        </div>
-      </div>
+      <OrdersHistorySection
+        v-memo="[historyLoading, orderHistory, soldHistory, expandedOrders, returningOrders, returnedOrders]"
+        :history-loading="historyLoading"
+        :order-history="orderHistory"
+        :expanded-orders="expandedOrders"
+        :returning-orders="returningOrders"
+        :returned-orders="returnedOrders"
+        :order-products="orderProducts"
+        @refresh="loadOrderHistory"
+        @toggle-order="toggleOrderDetails"
+        @return-order="handleReturnOrder"
+      />
     </div>
   </div>
 
@@ -347,6 +239,7 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import jsQR from 'jsqr';
 import { importsAPI, ordersAPI, soldAPI } from '../services/api';
 import { generateUniqueId } from '../services/api';
+import OrdersHistorySection from './OrdersHistorySection.vue';
 
 function getLocalDateTimeString(date = new Date()) {
   const tzOffset = date.getTimezoneOffset() * 60000;
@@ -354,26 +247,6 @@ function getLocalDateTimeString(date = new Date()) {
   return localISO.slice(0, 16);
 }
 
-function parseDateTimeValue(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return { timestamp: NaN, hasTime: false, day: NaN };
-  const timestamp = Date.parse(raw);
-  const hasTime = /T\d{2}:\d{2}/.test(raw) || /\d{1,2}:\d{2}/.test(raw);
-  if (Number.isNaN(timestamp)) {
-    return { timestamp: NaN, hasTime, day: NaN };
-  }
-  const dt = new Date(timestamp);
-  const day = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
-  return { timestamp, hasTime, day };
-}
-
-function formatDateTimeDisplay(value) {
-  const ts = Date.parse(value);
-  if (Number.isNaN(ts)) return value || 'N/A';
-  return new Date(ts).toLocaleString('vi-VN', {
-    hour12: false,
-  });
-}
 
 
 const orderForm = ref({
@@ -398,11 +271,6 @@ const historyLoading = ref(false);
 const expandedOrders = ref(new Set());
 const returningOrders = ref(new Set());
 const returnedOrders = ref(new Set());
-const filterOrderCode = ref('');
-const filterBarcode = ref('');
-const filterDateFrom = ref('');
-const filterDateTo = ref('');
-const sortOption = ref('datetime');
 const isScanningOrderCode = ref(false);
 const autoScanOrderCode = ref(false);
 const orderCodeVideoRef = ref(null);
@@ -553,70 +421,6 @@ function orderProducts(orderCode) {
   return orderItemsMap.value[orderCode] || [];
 }
 
-const filteredOrders = computed(() => {
-  const code = (filterOrderCode.value || '').toLowerCase();
-  const barcode = (filterBarcode.value || '').toLowerCase();
-  const from = filterDateFrom.value ? Date.parse(filterDateFrom.value) : null;
-  const to = filterDateTo.value ? Date.parse(filterDateTo.value) : null;
-
-  return orderHistory.value.filter((o) => {
-    if (code && !(o.order_code || '').toLowerCase().includes(code)) return false;
-
-    if (from || to) {
-      const pkgDate = Date.parse(o.package_date);
-      if (Number.isNaN(pkgDate)) return false;
-      if (from && pkgDate < from) return false;
-      if (to && pkgDate > to) return false;
-    }
-
-    if (barcode) {
-      const items = orderProducts(o.order_code);
-      const match = items.some((it) =>
-        String(it.barcode || '').toLowerCase().includes(barcode),
-      );
-      if (!match) return false;
-    }
-    return true;
-  });
-});
-
-function compareOrdersByDateTime(a, b) {
-  const pa = parseDateTimeValue(a?.package_date);
-  const pb = parseDateTimeValue(b?.package_date);
-
-  if (!Number.isNaN(pb.day) || !Number.isNaN(pa.day)) {
-    if (Number.isNaN(pa.day)) return 1;
-    if (Number.isNaN(pb.day)) return -1;
-    if (pa.day !== pb.day) return pb.day - pa.day; // ngày mới nhất trước
-  }
-
-  if (pa.hasTime && !pb.hasTime) return -1;
-  if (!pa.hasTime && pb.hasTime) return 1;
-
-  if (!Number.isNaN(pa.timestamp) || !Number.isNaN(pb.timestamp)) {
-    if (Number.isNaN(pa.timestamp)) return 1;
-    if (Number.isNaN(pb.timestamp)) return -1;
-    return pb.timestamp - pa.timestamp; // cùng ngày: giờ mới trước
-  }
-
-  return 0;
-}
-
-const sortedOrders = computed(() => {
-  const list = [...filteredOrders.value];
-  if (sortOption.value === 'code') {
-    return list.sort((a, b) => String(a.order_code || '').localeCompare(String(b.order_code || '')));
-  }
-  return list.sort(compareOrdersByDateTime);
-});
-
-function clearFilters() {
-  filterOrderCode.value = '';
-  filterBarcode.value = '';
-  filterDateFrom.value = '';
-  filterDateTo.value = '';
-}
-
 function toggleOrderDetails(orderCode) {
   const next = new Set(expandedOrders.value);
   if (next.has(orderCode)) {
@@ -669,12 +473,12 @@ function getBatchesForBarcode(barcode) {
     const importDate = parseImportDate(row?.[8]);
     batches.push({ row, productID, unitCost, available, importDate });
   }
-  // Sort by import date desc (newest first). Invalid dates are pushed to the end.
+  // Sort by import date asc (oldest first). Invalid dates are pushed to the end.
   batches.sort((a, b) => {
     if (a.importDate === b.importDate) return 0;
     if (a.importDate === Number.POSITIVE_INFINITY) return 1;
     if (b.importDate === Number.POSITIVE_INFINITY) return -1;
-    return b.importDate - a.importDate;
+    return a.importDate - b.importDate;
   });
   return batches;
 }
@@ -742,6 +546,20 @@ function addProductByBarcode() {
   }
 
   barcodeInput.value = '';
+}
+
+function handleOrderCodeEnter() {
+  const code = (orderForm.value.order_code || '').trim();
+  if (!code) return;
+
+  const exists = (orderHistory.value || []).some(
+    (o) => String(o.order_code || '').toLowerCase() === code.toLowerCase(),
+  );
+  if (exists) {
+    showMessage('Mã vận đơn đã tồn tại', 'error');
+    return;
+  }
+  focusBarcode();
 }
 
 function focusBarcode() {
