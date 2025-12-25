@@ -25,7 +25,7 @@
             </div>
             <div class="form-group">
               <label for="orderCode">Mã Vận Đơn</label>
-              <div class="input-with-action">
+              <div class="input-with-action input-with-action--double">
                 <input
                   v-model="orderForm.order_code"
                   type="text"
@@ -33,6 +33,7 @@
                   placeholder="Để trống để tự sinh"
                   ref="orderCodeRef"
                   @keyup.enter="focusBarcode"
+                  @focus="handleOrderCodeFocus"
                   class="input-field"
                 />
                 <button
@@ -41,7 +42,15 @@
                   @click="startOrderCodeScanner"
                   :disabled="isScanningOrderCode"
                 >
-                  📷 Quét QR
+                  📷
+                </button>
+                <button
+                  type="button"
+                  class="btn-secondary btn-auto-scan"
+                  @click="toggleOrderCodeAutoScan"
+                  :class="{ 'btn-active': autoScanOrderCode }"
+                >
+                  {{ autoScanOrderCode ? 'ON' : 'OFF' }}
                 </button>
               </div>
             </div>
@@ -313,7 +322,7 @@
 
   <transition name="fade">
     <div v-if="isScanningOrderCode" class="scanner-overlay">
-      <div class="scanner-modal">
+      <div class="scanner-modal" :class="{ 'scanner-modal--compact': isScanningOrderCode }">
         <div class="scanner-header">
           <div class="scanner-title">Quét mã vận đơn (QR)</div>
           <button type="button" class="scanner-close" @click="stopOrderCodeScanner">✕</button>
@@ -326,7 +335,7 @@
           </div>
         </div>
         <div class="scanner-footer">
-          <button type="button" class="btn-secondary" @click="stopOrderCodeScanner">Đóng</button>
+          <button type="button" class="btn-secondary" @click="stopOrderCodeScanner">Tắt camera</button>
         </div>
       </div>
     </div>
@@ -395,6 +404,7 @@ const filterDateFrom = ref('');
 const filterDateTo = ref('');
 const sortOption = ref('datetime');
 const isScanningOrderCode = ref(false);
+const autoScanOrderCode = ref(false);
 const orderCodeVideoRef = ref(null);
 const orderCodeScannerError = ref('');
 const orderCodeScannerStatus = ref('');
@@ -851,6 +861,7 @@ async function scanOrderCodeFrame() {
 }
 
 async function startOrderCodeScanner() {
+  if (isScanningOrderCode.value) return;
   resetOrderCodeScanner();
   orderCodeScannerError.value = '';
   orderCodeScannerStatus.value = 'Đang mở camera...';
@@ -880,6 +891,22 @@ async function startOrderCodeScanner() {
     console.error('Start scanner error:', error);
     orderCodeScannerError.value = error?.message || 'Không mở được camera.';
     orderCodeScannerStatus.value = '';
+  }
+}
+
+function handleOrderCodeFocus() {
+  if (!autoScanOrderCode.value || isScanningOrderCode.value) return;
+  startOrderCodeScanner();
+}
+
+function toggleOrderCodeAutoScan() {
+  autoScanOrderCode.value = !autoScanOrderCode.value;
+  if (!autoScanOrderCode.value) {
+    stopOrderCodeScanner();
+    return;
+  }
+  if (orderCodeRef.value && document.activeElement === orderCodeRef.value) {
+    startOrderCodeScanner();
   }
 }
 
@@ -1235,6 +1262,10 @@ label {
   align-items: center;
 }
 
+.input-with-action--double {
+  grid-template-columns: 1fr auto auto;
+}
+
 .btn-scan {
   padding: 10px 12px;
   border: 1px solid #86c06b;
@@ -1483,6 +1514,10 @@ label {
   background: #f3f4f6;
   border: 1px solid #ddd;
   color: #555;
+}
+
+.btn-auto-scan {
+  min-width: 90px;
 }
 
 .btn-secondary.btn-active {
@@ -1751,7 +1786,7 @@ label {
   background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 16px;
   z-index: 2000;
 }
@@ -1765,6 +1800,18 @@ label {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.scanner-modal--compact {
+  max-width: 360px;
+}
+
+.scanner-modal--compact .scanner-body {
+  padding: 12px;
+}
+
+.scanner-modal--compact .scanner-video {
+  aspect-ratio: 4 / 3;
 }
 
 .scanner-header {
