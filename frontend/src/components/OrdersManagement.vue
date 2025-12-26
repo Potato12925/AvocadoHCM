@@ -448,17 +448,26 @@ function parseImportDate(value) {
   const raw = String(value).trim();
   if (!raw) return Number.POSITIVE_INFINITY;
 
-  const direct = Date.parse(raw);
-  if (!Number.isNaN(direct)) return direct;
-
-  const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (match) {
-    const day = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10) - 1;
-    const year = parseInt(match[3].length === 2 ? `20${match[3]}` : match[3], 10);
-    const dt = new Date(year, month, day);
+  // Prefer parsing dd/mm/yyyy (and optional time) to avoid US month/day swap.
+  const dmyMatch = raw.match(
+    /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
+  );
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(
+      dmyMatch[3].length === 2 ? `20${dmyMatch[3]}` : dmyMatch[3],
+      10,
+    );
+    const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0;
+    const minute = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0;
+    const second = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0;
+    const dt = new Date(year, month, day, hour, minute, second);
     if (!Number.isNaN(dt.getTime())) return dt.getTime();
   }
+
+  const direct = Date.parse(raw);
+  if (!Number.isNaN(direct)) return direct;
 
   return Number.POSITIVE_INFINITY;
 }
@@ -480,6 +489,17 @@ function getBatchesForBarcode(barcode) {
     if (b.importDate === Number.POSITIVE_INFINITY) return -1;
     return a.importDate - b.importDate;
   });
+  console.log(
+    'Sorted batches for barcode',
+    barcode,
+    batches.map((b) => ({
+      productID: b.productID,
+      rawDate: b?.row?.[8],
+      parsedDate: b.importDate,
+      available: b.available,
+      unitCost: b.unitCost,
+    })),
+  );
   return batches;
 }
 
@@ -505,7 +525,7 @@ function addProductByBarcode() {
 
   const barcode = barcodeInput.value.trim();
   const batches = getBatchesForBarcode(barcode);
-  console.log("batches : ",batches);
+  console.log('batches:', batches);
   if (batches.length === 0) {
     showMessage('Không tìm thấy sản phẩm với mã barcode này', 'error');
     barcodeInput.value = '';
@@ -522,11 +542,17 @@ function addProductByBarcode() {
   const existingIdx = cartItems.value.findIndex((ci) => String(ci.barcode) === barcode);
   if (existingIdx === -1) {
     const top = batches[0];
+    console.log('Selected batch for new item', {
+      productID: top?.productID,
+      rawDate: top?.row?.[8],
+      parsedDate: top?.importDate,
+    });
     const brand = top?.row?.[2] || '';
     const name = top?.row?.[3] || '';
     const category = top?.row?.[4] || '';
     // Start with qty 1
     const { allocations, totalAvailable: avail, finalQty } = computeAllocations(barcode, 1);
+    console.log('Allocations for new item', allocations);
     cartItems.value.push({
       barcode,
       brand,
@@ -543,6 +569,11 @@ function addProductByBarcode() {
     current.qty_sold = finalQty;
     current.available_total = avail;
     current.allocations = allocations;
+    console.log('Updated allocations for existing item', {
+      barcode,
+      qty: finalQty,
+      allocations,
+    });
   }
 
   barcodeInput.value = '';
