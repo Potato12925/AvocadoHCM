@@ -359,7 +359,8 @@ const filteredImports = computed(() => {
   const query = (searchQuery.value || '').trim().toLowerCase();
   const monthFilter = selectedMonth.value;
 
-  return imports.value
+  return [...imports.value]
+    .reverse()
     .filter((item) => {
       const barcode = (item[1] || '').toString().toLowerCase();
       const name = (item[3] || '').toString().toLowerCase();
@@ -370,8 +371,7 @@ const filteredImports = computed(() => {
 
       const isoDate = getItemImportDateISO(item);
       return isoDate ? isoDate.startsWith(monthFilter) : false;
-    })
-    .sort((a, b) => getItemDateValue(b) - getItemDateValue(a));
+    });
 });
 
 const productsHeader = ref([]);

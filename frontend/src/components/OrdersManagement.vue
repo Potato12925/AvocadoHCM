@@ -391,7 +391,9 @@ async function loadOrderHistory() {
       rowIndex: idx + 2, // 1-based + header
     }));
 
-    expandedOrders.value = new Set();
+    expandedOrders.value = new Set(
+      orderHistory.value.map((order) => order.order_code).filter(Boolean),
+    );
     // Ghi nhận những đơn đã được đánh dấu trả (note chứa 'returned')
     const returned = new Set();
     for (const ord of orderHistory.value) {
@@ -472,10 +474,20 @@ function parseImportDate(value) {
   return Number.POSITIVE_INFINITY;
 }
 
+function normalizeBarcode(value) {
+  if (value === null || value === undefined) return '';
+  const trimmed = String(value).trim();
+  if (!trimmed) return '';
+  return trimmed.replace(/\.0+$/, '');
+}
+
 function getBatchesForBarcode(barcode) {
+  const target = normalizeBarcode(barcode);
+  if (!target) return [];
   const batches = [];
   for (const row of imports.value || []) {
-    if (String(row?.[1] || '') !== String(barcode)) continue;
+    const rowBarcode = normalizeBarcode(row?.[1]);
+    if (!rowBarcode || rowBarcode !== target) continue;
     const available = parseInt(row?.[11]) || 0;
     const unitCost = Number(row?.[6]) || 0;
     const productID = row?.[0];
@@ -523,7 +535,7 @@ function computeAllocations(barcode, desiredQty) {
 function addProductByBarcode() {
   if (!barcodeInput.value.trim()) return;
 
-  const barcode = barcodeInput.value.trim();
+  const barcode = normalizeBarcode(barcodeInput.value);
   const batches = getBatchesForBarcode(barcode);
   console.log('batches:', batches);
   if (batches.length === 0) {
@@ -539,7 +551,9 @@ function addProductByBarcode() {
     return;
   }
 
-  const existingIdx = cartItems.value.findIndex((ci) => String(ci.barcode) === barcode);
+  const existingIdx = cartItems.value.findIndex(
+    (ci) => normalizeBarcode(ci.barcode) === barcode,
+  );
   if (existingIdx === -1) {
     const top = batches[0];
     console.log('Selected batch for new item', {
