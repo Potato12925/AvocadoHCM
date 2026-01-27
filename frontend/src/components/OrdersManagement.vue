@@ -32,7 +32,7 @@
                   id="orderCode"
                   placeholder="Để trống để tự sinh"
                   ref="orderCodeRef"
-                  @keyup.enter="focusBarcode"
+                  @keyup.enter="handleOrderCodeEnter"
                   @focus="handleOrderCodeFocus"
                   class="input-field"
                 />
@@ -602,12 +602,13 @@ function handleOrderCodeEnter() {
   );
   if (exists) {
     showMessage('Mã vận đơn đã tồn tại', 'error');
+    orderForm.value.order_code = "";
     return;
   }
-  focusBarcode();
+  focusProductBarcode();
 }
 
-function focusBarcode() {
+function focusProductBarcode() {
   if (barcodeInputRef.value) {
     barcodeInputRef.value.focus();
   }
@@ -711,7 +712,7 @@ async function scanOrderCodeFrame() {
       showMessage('Đã quét mã vận đơn', 'success');
       stopOrderCodeScanner();
       await nextTick();
-      focusBarcode();
+      handleOrderCodeEnter();
       return;
     }
   } catch (error) {
