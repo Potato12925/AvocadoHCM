@@ -1153,18 +1153,18 @@ label {
 }
 
 .input-with-action--double {
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 6px;
 }
 
 .btn-scan {
-  padding: 10px 12px;
+  padding: 10px 8px;
   border: 1px solid #86c06b;
   background: #ecfdf3;
   color: #166534;
   border-radius: 8px;
   font-weight: 700;
   cursor: pointer;
-  min-width: 110px;
   transition: all 0.2s;
 }
 
@@ -1385,6 +1385,11 @@ label {
   transition: all 0.3s;
 }
 
+.input-with-action--double .btn-secondary {
+  padding: 10px 8px;
+  font-size: 14px;
+}
+
 .btn-submit {
   background: linear-gradient(135deg, #86c06b 0%, #6db046 100%);
   color: white;
@@ -1407,7 +1412,7 @@ label {
 }
 
 .btn-auto-scan {
-  min-width: 90px;
+  /* Removed min-width to allow equal sizing */
 }
 
 .btn-secondary.btn-active {
