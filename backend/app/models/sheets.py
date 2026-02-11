@@ -86,6 +86,10 @@ class Sheets:
         return _get_ws("Orders")
 
     @staticmethod
+    def external() -> gspread.Worksheet:
+        return _get_ws("External")
+
+    @staticmethod
     def sold() -> gspread.Worksheet:
         return _get_ws("Sold")
 

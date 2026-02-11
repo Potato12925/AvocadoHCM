@@ -237,8 +237,8 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import jsQR from 'jsqr';
-import { importsAPI, ordersAPI, soldAPI } from '../services/api';
-import { generateUniqueId } from '../services/api';
+import { importsAPI, ordersAPI, soldAPI, externalOrdersAPI } from '@/services/api';
+import { generateUniqueId } from '@/services/api';
 import OrdersHistorySection from './OrdersHistorySection.vue';
 
 function getLocalDateTimeString(date = new Date()) {

@@ -320,7 +320,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
-import { importsAPI, productsAPI } from '../services/api';
+import { importsAPI, productsAPI } from '@/services/api';
 
 const pendingItems = ref([]);
 const barcodeInputValue = ref('');

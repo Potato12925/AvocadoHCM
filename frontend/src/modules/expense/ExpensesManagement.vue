@@ -198,7 +198,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { expensesAPI } from '../services/api';
+import { expensesAPI } from '@/services/api';
 
 const form = ref({
   date: new Date().toISOString().split('T')[0],

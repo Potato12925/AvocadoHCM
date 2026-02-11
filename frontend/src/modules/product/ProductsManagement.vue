@@ -158,7 +158,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { productsAPI, importsAPI } from '../services/api';
+import { productsAPI, importsAPI } from '@/services/api';
 
 const products = ref([]); // mảng rows [barcode, hãng, tên, phân loại, đã đăng]
 const imports = ref([]);

@@ -1,9 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import ImportsManagement from '../components/ImportsManagement.vue';
-import ProductsManagement from '../components/ProductsManagement.vue';
-import OrdersManagement from '../components/OrdersManagement.vue';
-import SoldManagement from '../components/SoldManagement.vue';
-import ExpensesManagement from '../components/ExpensesManagement.vue';
+import ImportsManagement from '@/modules/import/ImportsManagement.vue';
+import ProductsManagement from '@/modules/product/ProductsManagement.vue';
+import OrdersManagement from '@/modules/order/OrdersManagement.vue';
+import SoldManagement from '@/modules/sold/SoldManagement.vue';
+import ExpensesManagement from '@/modules/expense/ExpensesManagement.vue';
 
 const routes = [
   { path: '/', redirect: '/import' },

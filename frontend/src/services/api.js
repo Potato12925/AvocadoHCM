@@ -124,6 +124,55 @@ export const ordersAPI = {
   },
 };
 
+// =============EXTERNAL ORDERS API =============
+export const externalOrdersAPI = {
+  async getAll() {
+    const response = await fetch(`${API_BASE_URL}/externals/get`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error('Failed to fetch orders');
+    return response.json();
+  },
+
+  async create(data) {
+    const response = await fetch(`${API_BASE_URL}/externals/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      let detail = 'Failed to create order';
+      try {
+        const err = await response.json();
+        detail = err?.detail || detail;
+      } catch (_) {}
+      throw new Error(detail);
+    }
+    return response.json();
+  },
+
+  async updateRows(updates) {
+    const response = await fetch(`${API_BASE_URL}/externals/rows/update`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    });
+    if (!response.ok) throw new Error('Failed to update orders');
+    return response.json();
+  },
+
+  async deleteRows(rows) {
+    const response = await fetch(`${API_BASE_URL}/externals/rows/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    });
+    if (!response.ok) throw new Error('Failed to delete orders');
+    return response.json();
+  },
+};
+
 // ============= SOLD API =============
 export const soldAPI = {
   async getAll() {

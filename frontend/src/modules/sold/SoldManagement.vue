@@ -105,7 +105,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { soldAPI } from '../services/api';
+import { soldAPI } from '@/services/api';
 
 const soldItems = ref([]);
 const loading = ref(false);
