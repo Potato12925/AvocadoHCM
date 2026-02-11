@@ -23,49 +23,51 @@
                 class="input-field"
               />
             </div>
-            <div class="form-group">
-              <label for="orderCode">Mã Vận Đơn</label>
-              <div class="input-with-action input-with-action--double">
-                <input
-                  v-model="orderForm.order_code"
-                  type="text"
-                  id="orderCode"
-                  placeholder="Để trống để tự sinh"
-                  ref="orderCodeRef"
-                  @keyup.enter="handleOrderCodeEnter"
-                  @focus="handleOrderCodeFocus"
-                  :disabled="isExternalOrder"
-                  class="input-field"
-                />
-                <button
-                  type="button"
-                  class="btn-scan"
-                  @click="startOrderCodeScanner"
-                  :disabled="isScanningOrderCode || isExternalOrder"
-                >
-                  📷
-                </button>
-                <button
-                  type="button"
-                  class="btn-secondary btn-auto-scan"
-                  @click="toggleOrderCodeAutoScan"
-                  :disabled="isExternalOrder"
-                  :class="{ 'btn-active': autoScanOrderCode }"
-                >
-                  {{ autoScanOrderCode ? 'ON' : 'OFF' }}
-                </button>
-                <button
-                  type="button"
-                  class="btn-secondary"
-                  @click="toggleExternalOrder"
-                  :class="{ 'btn-active': isExternalOrder }"
-                  title="Bật để tạo đơn ngoài (auto-generate mã vận đơn)"
-                >
-                  {{ isExternalOrder ? 'NGOÀI' : 'NỘI' }}
-                </button>
-              </div>
+          </div>
+
+          <div class="form-group">
+            <label for="orderCode">Mã Vận Đơn</label>
+            <div class="input-with-action input-with-action--double">
+              <input
+                v-model="orderForm.order_code"
+                type="text"
+                id="orderCode"
+                placeholder="Để trống để tự sinh"
+                ref="orderCodeRef"
+                @keyup.enter="handleOrderCodeEnter"
+                @focus="handleOrderCodeFocus"
+                :disabled="isExternalOrder"
+                class="input-field"
+              />
+              <button
+                type="button"
+                class="btn-scan"
+                @click="startOrderCodeScanner"
+                :disabled="isScanningOrderCode || isExternalOrder"
+              >
+                📷
+              </button>
+              <button
+                type="button"
+                class="btn-secondary btn-auto-scan"
+                @click="toggleOrderCodeAutoScan"
+                :disabled="isExternalOrder"
+                :class="{ 'btn-active': autoScanOrderCode }"
+              >
+                {{ autoScanOrderCode ? 'ON' : 'OFF' }}
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                @click="toggleExternalOrder"
+                :class="{ 'btn-active': isExternalOrder }"
+                title="Bật để tạo đơn ngoài (auto-generate mã vận đơn)"
+              >
+                {{ isExternalOrder ? 'NGOÀI' : 'NỘI' }}
+              </button>
             </div>
           </div>
+
           <div class="form-group">
             <label for="packageDate">Ngày giờ</label>
             <div class="input-with-action">
