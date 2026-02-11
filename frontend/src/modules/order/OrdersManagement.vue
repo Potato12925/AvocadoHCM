@@ -23,38 +23,51 @@
                 class="input-field"
               />
             </div>
-            <div class="form-group">
-              <label for="orderCode">Mã Vận Đơn</label>
-              <div class="input-with-action input-with-action--double">
-                <input
-                  v-model="orderForm.order_code"
-                  type="text"
-                  id="orderCode"
-                  placeholder="Để trống để tự sinh"
-                  ref="orderCodeRef"
-                  @keyup.enter="handleOrderCodeEnter"
-                  @focus="handleOrderCodeFocus"
-                  class="input-field"
-                />
-                <button
-                  type="button"
-                  class="btn-scan"
-                  @click="startOrderCodeScanner"
-                  :disabled="isScanningOrderCode"
-                >
-                  📷
-                </button>
-                <button
-                  type="button"
-                  class="btn-secondary btn-auto-scan"
-                  @click="toggleOrderCodeAutoScan"
-                  :class="{ 'btn-active': autoScanOrderCode }"
-                >
-                  {{ autoScanOrderCode ? 'ON' : 'OFF' }}
-                </button>
-              </div>
+          </div>
+
+          <div class="form-group">
+            <label for="orderCode">Mã Vận Đơn</label>
+            <div class="input-with-action input-with-action--double">
+              <input
+                v-model="orderForm.order_code"
+                type="text"
+                id="orderCode"
+                placeholder="Để trống để tự sinh"
+                ref="orderCodeRef"
+                @keyup.enter="handleOrderCodeEnter"
+                @focus="handleOrderCodeFocus"
+                :disabled="isExternalOrder"
+                class="input-field"
+              />
+              <button
+                type="button"
+                class="btn-scan"
+                @click="startOrderCodeScanner"
+                :disabled="isScanningOrderCode || isExternalOrder"
+              >
+                📷
+              </button>
+              <button
+                type="button"
+                class="btn-secondary btn-auto-scan"
+                @click="toggleOrderCodeAutoScan"
+                :disabled="isExternalOrder"
+                :class="{ 'btn-active': autoScanOrderCode }"
+              >
+                {{ autoScanOrderCode ? 'ON' : 'OFF' }}
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                @click="toggleExternalOrder"
+                :class="{ 'btn-active': isExternalOrder }"
+                title="Bật để tạo đơn ngoài (auto-generate mã vận đơn)"
+              >
+                {{ isExternalOrder ? 'NGOÀI' : 'NỘI' }}
+              </button>
             </div>
           </div>
+
           <div class="form-group">
             <label for="packageDate">Ngày giờ</label>
             <div class="input-with-action">
@@ -273,6 +286,7 @@ const returningOrders = ref(new Set());
 const returnedOrders = ref(new Set());
 const isScanningOrderCode = ref(false);
 const autoScanOrderCode = ref(false);
+const isExternalOrder = ref(false);
 const orderCodeVideoRef = ref(null);
 const orderCodeScannerError = ref('');
 const orderCodeScannerStatus = ref('');
@@ -774,6 +788,16 @@ function toggleOrderCodeAutoScan() {
   }
 }
 
+function toggleExternalOrder() {
+  isExternalOrder.value = !isExternalOrder.value;
+  if (isExternalOrder.value) {
+    // Tắt quét tự động khi bật chế độ đơn ngoài
+    autoScanOrderCode.value = false;
+    stopOrderCodeScanner();
+    orderForm.value.order_code = '';
+  }
+}
+
 async function handleCtrlEnter() {
   await submitOrder();
   await nextTick();
@@ -855,8 +879,9 @@ async function submitOrder() {
     const inputOrderCode = (orderForm.value.order_code || '').trim();
     const orderCode = inputOrderCode || `ORD-${Date.now()}`;
 
-    // Ghi đơn hàng
-    await ordersAPI.create({
+    // Ghi đơn hàng (nội hoặc ngoài)
+    const orderAPI = isExternalOrder.value ? externalOrdersAPI : ordersAPI;
+    await orderAPI.create({
       orderID,
       customer_name: orderForm.value.customer_name,
       order_code: orderCode,
@@ -912,6 +937,7 @@ async function submitOrder() {
     packageDateMode.value = 'now';
     barcodeInput.value = '';
     cartItems.value = [];
+    isExternalOrder.value = false;
 
 
     await loadOrderHistory();
@@ -1127,18 +1153,18 @@ label {
 }
 
 .input-with-action--double {
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 6px;
 }
 
 .btn-scan {
-  padding: 10px 12px;
+  padding: 10px 8px;
   border: 1px solid #86c06b;
   background: #ecfdf3;
   color: #166534;
   border-radius: 8px;
   font-weight: 700;
   cursor: pointer;
-  min-width: 110px;
   transition: all 0.2s;
 }
 
@@ -1359,6 +1385,11 @@ label {
   transition: all 0.3s;
 }
 
+.input-with-action--double .btn-secondary {
+  padding: 10px 8px;
+  font-size: 14px;
+}
+
 .btn-submit {
   background: linear-gradient(135deg, #86c06b 0%, #6db046 100%);
   color: white;
@@ -1381,7 +1412,7 @@ label {
 }
 
 .btn-auto-scan {
-  min-width: 90px;
+  /* Removed min-width to allow equal sizing */
 }
 
 .btn-secondary.btn-active {
