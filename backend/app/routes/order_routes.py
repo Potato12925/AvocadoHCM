@@ -63,7 +63,7 @@ def create_order(item: OrderItem):
             str(item.total_cost),
             item.note or ""
         ]
-        ws.append_row(row, value_input_option="USER_ENTERED")
+        ws.insert_row(row, index=2, value_input_option="USER_ENTERED")
         return {
             "message": "✅ Đã tạo đơn hàng",
             "orderID": item.orderID

@@ -63,7 +63,7 @@
                 :class="{ 'btn-active': isExternalOrder }"
                 title="Bật để tạo đơn ngoài (auto-generate mã vận đơn)"
               >
-                {{ isExternalOrder ? 'NGOÀI' : 'NỘI' }}
+                {{ isExternalOrder ? 'ĐƠN NGOÀI' : 'SHOPEE' }}
               </button>
             </div>
           </div>
