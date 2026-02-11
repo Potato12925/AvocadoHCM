@@ -1,4 +1,12 @@
-const API_BASE_URL = 'http://localhost:8000';
+// Determine API base URL based on environment
+const API_BASE_URL = (() => {
+  // In development (localhost), use localhost:8000
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000';
+  }
+  // In production, use relative path to same domain
+  return '';
+})();
 
 // ============= IMPORTS API =============
 export const importsAPI = {
