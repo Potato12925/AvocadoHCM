@@ -34,13 +34,14 @@
                   ref="orderCodeRef"
                   @keyup.enter="handleOrderCodeEnter"
                   @focus="handleOrderCodeFocus"
+                  :disabled="isExternalOrder"
                   class="input-field"
                 />
                 <button
                   type="button"
                   class="btn-scan"
                   @click="startOrderCodeScanner"
-                  :disabled="isScanningOrderCode"
+                  :disabled="isScanningOrderCode || isExternalOrder"
                 >
                   📷
                 </button>
@@ -48,9 +49,19 @@
                   type="button"
                   class="btn-secondary btn-auto-scan"
                   @click="toggleOrderCodeAutoScan"
+                  :disabled="isExternalOrder"
                   :class="{ 'btn-active': autoScanOrderCode }"
                 >
                   {{ autoScanOrderCode ? 'ON' : 'OFF' }}
+                </button>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  @click="toggleExternalOrder"
+                  :class="{ 'btn-active': isExternalOrder }"
+                  title="Bật để tạo đơn ngoài (auto-generate mã vận đơn)"
+                >
+                  {{ isExternalOrder ? 'NGOÀI' : 'NỘI' }}
                 </button>
               </div>
             </div>
@@ -273,6 +284,7 @@ const returningOrders = ref(new Set());
 const returnedOrders = ref(new Set());
 const isScanningOrderCode = ref(false);
 const autoScanOrderCode = ref(false);
+const isExternalOrder = ref(false);
 const orderCodeVideoRef = ref(null);
 const orderCodeScannerError = ref('');
 const orderCodeScannerStatus = ref('');
@@ -774,6 +786,16 @@ function toggleOrderCodeAutoScan() {
   }
 }
 
+function toggleExternalOrder() {
+  isExternalOrder.value = !isExternalOrder.value;
+  if (isExternalOrder.value) {
+    // Tắt quét tự động khi bật chế độ đơn ngoài
+    autoScanOrderCode.value = false;
+    stopOrderCodeScanner();
+    orderForm.value.order_code = '';
+  }
+}
+
 async function handleCtrlEnter() {
   await submitOrder();
   await nextTick();
@@ -855,8 +877,9 @@ async function submitOrder() {
     const inputOrderCode = (orderForm.value.order_code || '').trim();
     const orderCode = inputOrderCode || `ORD-${Date.now()}`;
 
-    // Ghi đơn hàng
-    await ordersAPI.create({
+    // Ghi đơn hàng (nội hoặc ngoài)
+    const orderAPI = isExternalOrder.value ? externalOrdersAPI : ordersAPI;
+    await orderAPI.create({
       orderID,
       customer_name: orderForm.value.customer_name,
       order_code: orderCode,
@@ -912,6 +935,7 @@ async function submitOrder() {
     packageDateMode.value = 'now';
     barcodeInput.value = '';
     cartItems.value = [];
+    isExternalOrder.value = false;
 
 
     await loadOrderHistory();
