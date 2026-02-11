@@ -256,15 +256,19 @@ def create_product_row(item: Dict[str, Any]) -> Dict[str, Any]:
     data = values[1:] if len(values) > 1 else []
 
     row = _dict_to_row(item, header)
+
     if not values:
         ws.append_row(row, value_input_option="USER_ENTERED")
+        inserted_row = 2
     else:
         insert_at = _determine_insert_position_for_product(header, data, row)
         ws.insert_row(row, index=insert_at, value_input_option="USER_ENTERED")
+        inserted_row = insert_at
 
-    sync_product_quantities()
-    return {"message": "✅ Đã thêm sản phẩm", "row_values": row}
+    # 👇 chỉ sync cho dòng vừa tạo
+    sync_single_product_row(item, inserted_row)
 
+    return {"message": "✅ Đã thêm sản phẩm", "row_index": inserted_row}
 
 def update_product_rows_bulk(req: UpdateRowsRequest) -> Dict[str, Any]:
     ws = Sheets.products()
@@ -384,3 +388,56 @@ def sync_product_quantities() -> Dict[str, Any]:
     col_letter = _column_letter(idx_quantity + 1)
     ws.update(f"{col_letter}{start_row}:{col_letter}{end_row}", values_to_write, value_input_option="USER_ENTERED")
     return {"updated_rows": len(values_to_write), "message": f"Đã đồng bộ tồn kho cho {len(values_to_write)} sản phẩm."}
+
+def sync_single_product_row(item: Dict[str, Any], row_index: int):
+    print(f"[SYNC] Start sync row {row_index} | item={item}")
+
+    ws = Sheets.products()
+    header, _ = _get_header_and_values(ws)
+
+    def norm(h: str) -> str:
+        return (h or "").strip().lower()
+
+    idx = {norm(h): i for i, h in enumerate(header)}
+    print(f"[SYNC] Header index map: {idx}")
+
+    idx_barcode = idx.get("barcode")
+    idx_quantity = idx.get("số lượng") or idx.get("quantity")
+    idx_posted = idx.get("đã đăng")
+
+    if idx_barcode is None or idx_quantity is None or idx_posted is None:
+        print("[SYNC][ERROR] Missing required columns", {
+            "barcode": idx_barcode,
+            "quantity": idx_quantity,
+            "posted": idx_posted
+        })
+        return
+
+    barcode = str(item.get("barcode", "")).strip()
+    print(f"[SYNC] Barcode = '{barcode}'")
+
+    stock_map = _aggregate_stock_from_imports()
+    qty = stock_map.get(barcode, 0)
+    print(f"[SYNC] Calculated qty = {qty}")
+
+    col_qty = _column_letter(idx_quantity + 1)
+    col_posted = _column_letter(idx_posted + 1)
+    print(f"[SYNC] Columns → qty={col_qty}, posted={col_posted}")
+
+    # update số lượng
+    ws.update(
+        f"{col_qty}{row_index}",
+        [[str(qty)]],
+        value_input_option="USER_ENTERED"
+    )
+    print(f"[SYNC][OK] Updated quantity at {col_qty}{row_index}")
+
+    # reset đã đăng
+    ws.update(
+        f"{col_posted}{row_index}",
+        [["0"]],
+        value_input_option="USER_ENTERED"
+    )
+    print(f"[SYNC][OK] Reset posted at {col_posted}{row_index}")
+
+    print(f"[SYNC][DONE] Row {row_index} synced successfully")

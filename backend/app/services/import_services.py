@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 from app.models.sheets import Sheets
 from app.utils.id_generator import gen_product_id
 from app.models.imports import ImportItem, DeleteRowsRequest, UpdateRowsRequest
-from app.services.product_services import sync_product_quantities
+from app.services.product_services import sync_product_quantities,sync_single_product_row,_get_header_and_values
 
 # ===================== Helpers & Constants =====================
 
@@ -89,11 +89,28 @@ def list_imports_raw() -> Dict[str, Any]:
     return {"header": header, "count": len(data), "data": data}
 
 # ---------- CREATE ----------
+def find_product_row_by_barcode(barcode: str) -> int | None:
+    ws = Sheets.products()
+    header, values = _get_header_and_values(ws)
+
+    def norm(h: str) -> str:
+        return (h or "").strip().lower()
+
+    idx_barcode = {norm(h): i for i, h in enumerate(header)}.get("barcode")
+    if idx_barcode is None:
+        return None
+
+    for i, row in enumerate(values, start=2):  # start=2 vì row 1 là header
+        if len(row) > idx_barcode and str(row[idx_barcode]).strip() == barcode:
+            return i
+
+    return None
+
 def create_import_row(item: ImportItem) -> Dict[str, Any]:
     ws = Sheets.imports()
     product_id = gen_product_id()
 
-    # Ngày nhập (VN): ưu tiên normalize input; rỗng -> hôm nay
+    # Ngày nhập (VN)
     if item.import_date:
         import_date = _normalize_date_vn(item.import_date)
     else:
@@ -120,7 +137,20 @@ def create_import_row(item: ImportItem) -> Dict[str, Any]:
     ]
 
     ws.append_row(row, value_input_option="USER_ENTERED")
-    sync_product_quantities()
+    print("✅ Đã append import row")
+
+    # 🔹 Tìm dòng sản phẩm để sync
+    product_row = find_product_row_by_barcode(item.barcode)
+
+    if product_row:
+        print(f"🔎 Tìm thấy sản phẩm tại row {product_row}, bắt đầu sync")
+        sync_single_product_row(
+            item={"barcode": item.barcode},
+            row_index=product_row
+        )
+    else:
+        print(f"⚠️ Không tìm thấy sản phẩm với barcode {item.barcode}")
+
     return {
         "message": "✅ Đã thêm lô hàng mới",
         "productID": product_id,
