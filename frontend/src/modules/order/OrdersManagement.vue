@@ -17,15 +17,21 @@
               :customer-name="orderForm.customer_name"
               :order-code="orderForm.order_code"
               :package-date="orderForm.package_date"
+              :order-history="orderHistory"
+              :order-code-ref="orderCodeRef"
+
+              @update:customer-name="orderForm.customer_name = $event"
+              @update:order-code="orderForm.order_code = $event"
+              @update:package-date="(val) => { orderForm.package_date = val; packageDateTouched = true; }"
+              @show-message="showMessage"
+              @focus-product-barcode="focusProductBarcode"
+
+
               :show-package-date-picker="showPackageDatePicker"
               :package-date-mode="packageDateMode"
               :auto-scan-order-code="autoScanOrderCode"
               :is-external-order="isExternalOrder"
               :is-scanning-order-code="isScanningOrderCode"
-              :order-code-ref="orderCodeRef"
-              @update:customer-name="orderForm.customer_name = $event"
-              @update:order-code="orderForm.order_code = $event"
-              @update:package-date="(val) => { orderForm.package_date = val; packageDateTouched = true; }"
               @order-code-enter="handleOrderCodeEnter"
               @order-code-focus="handleOrderCodeFocus"
               @start-scanner="startOrderCodeScanner"
@@ -157,53 +163,6 @@ let orderCodeStream = null;
 let orderCodeScanHandle = 0;
 let jsqrCanvas = null;
 let jsqrCtx = null;
-
-/**
- * Cập nhật cache imports.value theo danh sách updates (row 1-based, có header).
- * Tránh phải reload toàn bộ khi chỉ đổi qty_sold/available_qty.
- */
-function applyLocalImportUpdates(updates = []) {
-  if (!Array.isArray(updates) || updates.length === 0) return;
-
-  const map = new Map();
-  for (const u of updates) {
-    if (!u || !Number.isInteger(u.row) || u.row <= 1 || !u.data) continue;
-    map.set(u.row, u.data);
-  }
-  if (map.size === 0) return;
-
-  const next = imports.value.map((row, idx) => {
-    const sheetRow = idx + 2; // +1 header, +1 1-based
-    const data = map.get(sheetRow);
-    if (!data) return row;
-
-    const clone = Array.isArray(row) ? [...row] : [];
-    if (Object.prototype.hasOwnProperty.call(data, 'qty_in')) {
-      clone[5] = data.qty_in;
-    }
-    if (Object.prototype.hasOwnProperty.call(data, 'qty_sold')) {
-      clone[10] = data.qty_sold;
-    }
-    if (Object.prototype.hasOwnProperty.call(data, 'available_qty')) {
-      clone[11] = data.available_qty;
-    }
-    if (Object.prototype.hasOwnProperty.call(data, 'unit_cost')) {
-      clone[6] = data.unit_cost;
-    }
-    if (Object.prototype.hasOwnProperty.call(data, 'break_even_price')) {
-      clone[7] = data.break_even_price;
-    }
-    if (Object.prototype.hasOwnProperty.call(data, 'import_date')) {
-      clone[8] = data.import_date;
-    }
-    if (Object.prototype.hasOwnProperty.call(data, 'note')) {
-      clone[9] = data.note;
-    }
-    return clone;
-  });
-
-  imports.value = next;
-}
 
 function itemTotalCost(item) {
   if (!item || !Array.isArray(item.allocations)) return 0;
@@ -461,21 +420,6 @@ function addProductByBarcode() {
   barcodeInput.value = '';
 }
 
-function handleOrderCodeEnter() {
-  const code = (orderForm.value.order_code || '').trim();
-  if (!code) return;
-
-  const exists = (orderHistory.value || []).some(
-    (o) => String(o.order_code || '').toLowerCase() === code.toLowerCase(),
-  );
-  if (exists) {
-    showMessage('Mã vận đơn đã tồn tại', 'error');
-    orderForm.value.order_code = "";
-    return;
-  }
-  focusProductBarcode();
-}
-
 function focusProductBarcode() {
   if (barcodeInputRef.value) {
     barcodeInputRef.value.focus();
@@ -631,26 +575,26 @@ function handleOrderCodeFocus() {
   startOrderCodeScanner();
 }
 
-function toggleOrderCodeAutoScan() {
-  autoScanOrderCode.value = !autoScanOrderCode.value;
-  if (!autoScanOrderCode.value) {
-    stopOrderCodeScanner();
-    return;
-  }
-  if (orderCodeRef.value && document.activeElement === orderCodeRef.value) {
-    startOrderCodeScanner();
-  }
-}
+// function toggleOrderCodeAutoScan() {
+//   autoScanOrderCode.value = !autoScanOrderCode.value;
+//   if (!autoScanOrderCode.value) {
+//     stopOrderCodeScanner();
+//     return;
+//   }
+//   if (orderCodeRef.value && document.activeElement === orderCodeRef.value) {
+//     startOrderCodeScanner();
+//   }
+// }
 
-function toggleExternalOrder() {
-  isExternalOrder.value = !isExternalOrder.value;
-  if (isExternalOrder.value) {
-    // Tắt quét tự động khi bật chế độ đơn ngoài
-    autoScanOrderCode.value = false;
-    stopOrderCodeScanner();
-    orderForm.value.order_code = '';
-  }
-}
+// function toggleExternalOrder() {
+//   isExternalOrder.value = !isExternalOrder.value;
+//   if (isExternalOrder.value) {
+//     // Tắt quét tự động khi bật chế độ đơn ngoài
+//     autoScanOrderCode.value = false;
+//     stopOrderCodeScanner();
+//     orderForm.value.order_code = '';
+//   }
+// }
 
 async function handleCtrlEnter() {
   await submitOrder();
@@ -696,45 +640,30 @@ function clearCart() {
   }
 }
 
-function setPackageDateNow() {
-  orderForm.value.package_date = getLocalDateTimeString();
-  packageDateTouched.value = true;
-  packageDateMode.value = 'now';
-  showPackageDatePicker.value = false;
-}
-
-function togglePackageDatePicker() {
-  showPackageDatePicker.value = !showPackageDatePicker.value;
-  if (showPackageDatePicker.value) {
-    packageDateMode.value = 'custom';
-  }
-}
-
 async function submitOrder() {
   if (loading.value) return;
+
   if (cartItems.value.length === 0) {
     showMessage('Vui lòng thêm sản phẩm vào đơn hàng', 'error');
     return;
   }
 
-
-  if (!packageDateTouched.value || !orderForm.value.package_date) {
-
+  if (!orderForm.value.package_date) {
     orderForm.value.package_date = getLocalDateTimeString();
-
   }
-
 
   loading.value = true;
 
   try {
-
     const orderID = generateUniqueId();
     const inputOrderCode = (orderForm.value.order_code || '').trim();
     const orderCode = inputOrderCode || `ORD-${Date.now()}`;
 
-    // Ghi đơn hàng (nội hoặc ngoài)
-    const orderAPI = isExternalOrder.value ? externalOrdersAPI : ordersAPI;
+    const orderAPI = isExternalOrder.value
+      ? externalOrdersAPI
+      : ordersAPI;
+
+    // 1️⃣ Tạo order
     await orderAPI.create({
       orderID,
       customer_name: orderForm.value.customer_name,
@@ -744,8 +673,9 @@ async function submitOrder() {
       note: '',
     });
 
-    // Ghi chi tiết sản phẩm đã bán theo phân bổ
-    const updates = [];
+    // 2️⃣ Tạo sold + gom update tồn kho
+    const updatesMap = new Map();
+
     for (const item of cartItems.value) {
       for (const al of item.allocations || []) {
         if (!al || !al.qty) continue;
@@ -761,38 +691,75 @@ async function submitOrder() {
           total_cost: al.qty * al.unit_cost,
         });
 
-        const importRowData = imports.value.find((imp) => imp[0] === al.productID);
-        if (importRowData) {
-          const rowIndex = imports.value.indexOf(importRowData) + 2; // 1-based, +1 for header
-          const currentQtySold = parseInt(importRowData[10]) || 0;
-          const newQtySold = currentQtySold + al.qty;
-          const newAvailableQty = parseInt(importRowData[5]) - newQtySold;
-          updates.push({
-            row: rowIndex,
-            data: { qty_sold: newQtySold, available_qty: newAvailableQty },
+        const rowIndex = imports.value.findIndex(
+          (imp) => imp[0] === al.productID
+        );
+
+        if (rowIndex === -1) continue;
+
+        const importRowData = imports.value[rowIndex];
+
+        const currentQtySold = parseInt(importRowData[10]) || 0;
+        const currentAvailable = parseInt(importRowData[5]) || 0;
+
+        const newQtySold = currentQtySold + al.qty;
+        const newAvailableQty = currentAvailable - al.qty;
+
+        if (newAvailableQty < 0) {
+          throw new Error(
+            `Sản phẩm ${item.name} không đủ tồn kho`
+          );
+        }
+
+        if (updatesMap.has(rowIndex)) {
+          const existing = updatesMap.get(rowIndex);
+
+          updatesMap.set(rowIndex, {
+            row: rowIndex + 2, // 1-based + header
+            data: {
+              qty_sold: existing.data.qty_sold + al.qty,
+              available_qty: existing.data.available_qty - al.qty,
+            },
+          });
+        } else {
+          updatesMap.set(rowIndex, {
+            row: rowIndex + 2,
+            data: {
+              qty_sold: newQtySold,
+              available_qty: newAvailableQty,
+            },
           });
         }
       }
     }
 
+    const updates = Array.from(updatesMap.values());
+
     if (updates.length > 0) {
       await importsAPI.updateRows(updates);
-      applyLocalImportUpdates(updates);
+
+      // 🔥 LOAD LẠI TỪ SERVER THAY VÌ APPLY LOCAL
+      await loadImports();
     }
 
-    showMessage(`Tạo đơnn hàng thành công! Mã: ${orderCode}`, 'success');
+    showMessage(
+      `Tạo đơn hàng thành công! Mã: ${orderCode}`,
+      'success'
+    );
+
+    // 3️⃣ Reset form
     orderForm.value = {
       customer_name: '',
       order_code: '',
       package_date: getLocalDateTimeString(),
     };
+
     packageDateTouched.value = false;
     showPackageDatePicker.value = false;
     packageDateMode.value = 'now';
     barcodeInput.value = '';
     cartItems.value = [];
     isExternalOrder.value = false;
-
 
     await loadOrderHistory();
   } catch (error) {
@@ -950,7 +917,7 @@ async function handleReturnOrder(orderCodes) {
     }
 
     await importsAPI.updateRows(updates);
-    applyLocalImportUpdates(updates);
+    await loadImports();
     const detailMessages = updates.map(u => {
       return `${u.productName} (${u.productID})
     Tăng: +${u.increase}

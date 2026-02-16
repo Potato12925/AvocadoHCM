@@ -693,7 +693,7 @@ async function deleteByBarcode(barcode) {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  z-index: 1000;
+  z-index: 10000;
 }
 
 .modal {

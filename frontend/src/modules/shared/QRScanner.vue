@@ -1,7 +1,7 @@
 <template>
   <div class="qr-wrapper">
     <button class="scan-btn" @click="startScanner">
-      Quét QR
+      📷
     </button>
 
     <transition name="fade">

@@ -2,7 +2,7 @@
   <div class="form-group">
     <label for="customerName">Tên Khách Hàng</label>
     <input
-      v-model="localCustomerName"
+      v-model="CustomerName"
       type="text"
       id="customerName"
       placeholder="Tên khách hàng"
@@ -15,12 +15,12 @@
     <label for="orderCode">Mã Vận Đơn</label>
     <div class="input-with-action input-with-action--double">
       <input
-        v-model="localOrderCode"
+        v-model="OrderCode"
         type="text"
         id="orderCode"
         placeholder="Để trống để tự sinh"
         ref="orderCodeRef"
-        @keyup.enter="emitOrderCodeEnter"
+        @keyup.enter="handleOrderCodeEnter"
         @focus="emitOrderCodeFocus"
         :disabled="isExternalOrder"
         class="input-field"
@@ -36,7 +36,7 @@
       <button
         type="button"
         class="btn-secondary btn-auto-scan"
-        @click="emitToggleAutoScan"
+        @click="toggleOrderCodeAutoScan"
         :disabled="isExternalOrder"
         :class="{ 'btn-active': autoScanOrderCode }"
       >
@@ -45,7 +45,7 @@
       <button
         type="button"
         class="btn-secondary"
-        @click="emitToggleExternalOrder"
+        @click="toggleExternalOrder"
         :class="{ 'btn-active': isExternalOrder }"
         title="Bật để tạo đơn ngoài (auto-generate mã vận đơn)"
       >
@@ -61,7 +61,7 @@
         type="button"
         class="btn-secondary"
         :class="{ 'btn-active': packageDateMode === 'now' }"
-        @click="emitSetPackageDateNow"
+        @click="setPackageDateNow"
       >
         Hiện tại
       </button>
@@ -69,14 +69,14 @@
         type="button"
         class="btn-secondary"
         :class="{ 'btn-active': packageDateMode === 'custom' }"
-        @click="emitTogglePackageDatePicker"
+        @click="togglePackageDatePicker"
       >
         {{ showPackageDatePicker ? 'Ẩn chọn ngày' : 'Chọn ngày' }}
       </button>
     </div>
     <input
       v-if="showPackageDatePicker"
-      v-model="localPackageDate"
+      v-model="PackageDate"
       type="datetime-local"
       id="packageDate"
       required
@@ -86,65 +86,107 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue';
-
+import { PropType } from 'vue'
 const props = defineProps({
   customerName: String,
   orderCode: String,
   packageDate: String,
-  showPackageDatePicker: Boolean,
-  packageDateMode: String,
   autoScanOrderCode: Boolean,
   isExternalOrder: Boolean,
   isScanningOrderCode: Boolean,
-  orderCodeRef: Object,
+
+  orderHistory: {
+    type: Array as PropType<{
+      orderID: string
+      customer_name: string
+      order_code: string
+      package_date: string
+      total_cost: number
+      note: string
+      rowIndex: number
+    }[]>,
+    default: () => []
+  }
 });
 
 const emit = defineEmits([
   'update:customerName',
   'update:orderCode',
   'update:packageDate',
-  'orderCodeEnter',
+  'update:isExternalOrder',
+  'showMessage',
+  'focusProductBarcode',
+  'stopOrderCodeScanner',
+  'startOrderCodeScanner',  
   'orderCodeFocus',
   'startScanner',
-  'toggleAutoScan',
-  'toggleExternalOrder',
-  'setPackageDateNow',
-  'togglePackageDatePicker',
+
 ]);
 
-const localCustomerName = ref(props.customerName || '');
-const localOrderCode = ref(props.orderCode || '');
-const localPackageDate = ref(props.packageDate || '');
+const CustomerName = ref(props.customerName || '');
+const OrderCode = ref(props.orderCode || '');
 
+const PackageDate = ref(props.packageDate || '');
+const showPackageDatePicker = ref(false)
+const packageDateMode = ref('now');
+
+const autoScanOrderCode = ref(props.autoScanOrderCode || false)
+
+const isExternalOrder = ref(props.isExternalOrder || false)
+
+const orderCodeRef = ref(null)
 watch(() => props.customerName, (newVal) => {
-  localCustomerName.value = newVal || '';
+  CustomerName.value = newVal || '';
 });
 
 watch(() => props.orderCode, (newVal) => {
-  localOrderCode.value = newVal || '';
+  OrderCode.value = newVal || '';
 });
 
 watch(() => props.packageDate, (newVal) => {
-  localPackageDate.value = newVal || '';
+  PackageDate.value = newVal || '';
 });
 
 const emitCustomerNameChange = () => {
-  emit('update:customerName', localCustomerName.value);
+  emit('update:customerName', CustomerName.value);
 };
 
 const emitOrderCodeChange = () => {
-  emit('update:orderCode', localOrderCode.value);
+  emit('update:orderCode', OrderCode.value);
 };
 
 const emitPackageDateChange = () => {
-  emit('update:packageDate', localPackageDate.value);
+  emit('update:packageDate', PackageDate.value);
 };
 
-const emitOrderCodeEnter = () => {
+const emitIsExternalOrderChange = () => {
+  emit('update:isExternalOrder');
+}
+
+const emitShowMessage = (text : String,type : String) => {
+  emit("showMessage",text,type)
+}
+
+const emitFocusProductBarcode = () => {
+  emit('focusProductBarcode');
+}
+
+const handleOrderCodeEnter = () => {
   emitOrderCodeChange();
-  emit('orderCodeEnter');
+  const code = (OrderCode.value || '').trim();
+  if (!code) return;
+
+  const exists = (props.orderHistory || []).some(
+    (o) => String(o.order_code || '').toLowerCase() === code.toLowerCase(),
+  );
+  if (exists) {
+    emitShowMessage('Mã vận đơn đã tồn tại', 'error');
+    OrderCode.value = "";
+    return;
+  }
+  emitFocusProductBarcode();
 };
 
 const emitOrderCodeFocus = () => {
@@ -155,21 +197,56 @@ const emitStartScanner = () => {
   emit('startScanner');
 };
 
-const emitToggleAutoScan = () => {
-  emit('toggleAutoScan');
-};
+const emitStopOrderCodeScanner = () => {
+  emit('stopOrderCodeScanner');
+}
 
-const emitToggleExternalOrder = () => {
-  emit('toggleExternalOrder');
-};
+const emitStartOrderCodeScanner = () => {
+  emit('startOrderCodeScanner');
+}
 
-const emitSetPackageDateNow = () => {
-  emit('setPackageDateNow');
-};
+function toggleOrderCodeAutoScan() {
+  autoScanOrderCode.value = !autoScanOrderCode.value;
+  if (!autoScanOrderCode.value) {
+    emitStopOrderCodeScanner();
+    return;
+  }
+  if (orderCodeRef.value && document.activeElement === orderCodeRef.value) {
+    emitStartOrderCodeScanner();
+  }
+}
 
-const emitTogglePackageDatePicker = () => {
-  emit('togglePackageDatePicker');
-};
+function toggleExternalOrder() {
+  isExternalOrder.value = !isExternalOrder.value;
+  emitIsExternalOrderChange();
+  if (isExternalOrder.value) {
+    // Tắt quét tự động khi bật chế độ đơn ngoài
+    autoScanOrderCode.value = false;
+    emitStopOrderCodeScanner();
+    OrderCode.value = "";
+    emitOrderCodeChange();
+  }
+}
+
+function getLocalDateTimeString(date = new Date()) {
+  const tzOffset = date.getTimezoneOffset() * 60000;
+  const localISO = new Date(date.getTime() - tzOffset).toISOString();
+  return localISO.slice(0, 16);
+}
+
+function setPackageDateNow() {
+  PackageDate.value = getLocalDateTimeString();
+  packageDateMode.value = 'now';
+  showPackageDatePicker.value = false;
+  emitPackageDateChange();
+}
+
+function togglePackageDatePicker() {
+  showPackageDatePicker.value = !showPackageDatePicker.value;
+  if (showPackageDatePicker.value) {
+    packageDateMode.value = 'custom';
+  }
+}
 </script>
 
 <style scoped>
