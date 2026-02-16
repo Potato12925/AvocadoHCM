@@ -13,221 +13,56 @@
           class="order-form"
         >
           <div class="form-row">
-            <div class="form-group">
-              <label for="customerName">Tên Khách Hàng</label>
-              <input
-                v-model="orderForm.customer_name"
-                type="text"
-                id="customerName"
-                placeholder="Tên khách hàng"
-                class="input-field"
-              />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="orderCode">Mã Vận Đơn</label>
-            <div class="input-with-action input-with-action--double">
-              <input
-                v-model="orderForm.order_code"
-                type="text"
-                id="orderCode"
-                placeholder="Để trống để tự sinh"
-                ref="orderCodeRef"
-                @keyup.enter="handleOrderCodeEnter"
-                @focus="handleOrderCodeFocus"
-                :disabled="isExternalOrder"
-                class="input-field"
-              />
-              <button
-                type="button"
-                class="btn-scan"
-                @click="startOrderCodeScanner"
-                :disabled="isScanningOrderCode || isExternalOrder"
-              >
-                📷
-              </button>
-              <button
-                type="button"
-                class="btn-secondary btn-auto-scan"
-                @click="toggleOrderCodeAutoScan"
-                :disabled="isExternalOrder"
-                :class="{ 'btn-active': autoScanOrderCode }"
-              >
-                {{ autoScanOrderCode ? 'ON' : 'OFF' }}
-              </button>
-              <button
-                type="button"
-                class="btn-secondary"
-                @click="toggleExternalOrder"
-                :class="{ 'btn-active': isExternalOrder }"
-                title="Bật để tạo đơn ngoài (auto-generate mã vận đơn)"
-              >
-                {{ isExternalOrder ? 'ĐƠN NGOÀI' : 'SHOPEE' }}
-              </button>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="packageDate">Ngày giờ</label>
-            <div class="input-with-action">
-              <button
-                type="button"
-                class="btn-secondary"
-                :class="{ 'btn-active': packageDateMode === 'now' }"
-                @click="setPackageDateNow"
-              >
-                Hiện tại
-              </button>
-              <button
-                type="button"
-                class="btn-secondary"
-                :class="{ 'btn-active': packageDateMode === 'custom' }"
-                @click="togglePackageDatePicker"
-              >
-                {{ showPackageDatePicker ? 'Ẩn chọn ngày' : 'Chọn ngày' }}
-              </button>
-            </div>
-            <input
-              v-if="showPackageDatePicker"
-              v-model="orderForm.package_date"
-              type="datetime-local"
-              id="packageDate"
-              required
-              @input="packageDateTouched = true"
-              class="input-field"
+            <OrderFormHeader
+              :customer-name="orderForm.customer_name"
+              :order-code="orderForm.order_code"
+              :package-date="orderForm.package_date"
+              :show-package-date-picker="showPackageDatePicker"
+              :package-date-mode="packageDateMode"
+              :auto-scan-order-code="autoScanOrderCode"
+              :is-external-order="isExternalOrder"
+              :is-scanning-order-code="isScanningOrderCode"
+              :order-code-ref="orderCodeRef"
+              @update:customer-name="orderForm.customer_name = $event"
+              @update:order-code="orderForm.order_code = $event"
+              @update:package-date="(val) => { orderForm.package_date = val; packageDateTouched = true; }"
+              @order-code-enter="handleOrderCodeEnter"
+              @order-code-focus="handleOrderCodeFocus"
+              @start-scanner="startOrderCodeScanner"
+              @toggle-auto-scan="toggleOrderCodeAutoScan"
+              @toggle-external-order="toggleExternalOrder"
+              @set-package-date-now="setPackageDateNow"
+              @toggle-package-date-picker="togglePackageDatePicker"
             />
           </div>
 
-          <h3 class="subsection-title">Thêm Sản Phẩm Vào Đơn</h3>
-
-          <div class="form-group">
-            <label for="barcodeInput">Quét/Nhập Barcode</label>
-            <input
-              v-model="barcodeInput"
-              type="text"
-              id="barcodeInput"
-              placeholder="Nhập hoặc quét mã barcode"
-              ref="barcodeInputRef"
-              @keyup.enter="addProductByBarcode"
-              class="input-field"
-            />
-          </div>
-
-          <div v-if="cartItems.length === 0" class="empty-cart">
-            Chưa có sản phẩm nào trong đơn hàng
-          </div>
-
-          <div v-else class="cart-items">
-            <div class="cart-item" v-for="(item, idx) in cartItems" :key="idx">
-              <div class="item-info">
-                <div class="item-name">{{ item.name }}</div>
-                <div class="item-details">
-                  {{ item.barcode }} | {{ item.brand }} | {{ item.category }}
-                </div>
-                <div class="item-available">Tồn: {{ item.available_total }}</div>
-                <div class="item-chips">
-                  <span
-                    v-for="al in item.allocations"
-                    :key="al.productID"
-                    class="chip chip-alloc"
-                  >
-                    {{ al.qty }} × {{ formatNumber(al.unit_cost) }}₫ (ID {{ al.productID }})
-                  </span>
-                </div>
-                <div class="item-cost">Tổng giá vốn: {{ formatNumber(itemTotalCost(item)) }}₫</div>
-              </div>
-
-              <div class="item-qty">
-                <button
-                  type="button"
-                  @click="decreaseQty(idx)"
-                  class="btn-qty"
-                  :disabled="item.qty_sold <= 1"
-                >
-                  −
-                </button>
-                <input
-                  v-model.number="item.qty_sold"
-                  type="number"
-                  min="1"
-                  :max="item.available_total"
-                  @change="refreshAllocationsForIndex(idx)"
-                  class="qty-input"
-                />
-                <button
-                  type="button"
-                  @click="increaseQty(idx)"
-                  class="btn-qty"
-                  :disabled="item.qty_sold >= item.available_total"
-                >
-                  +
-                </button>
-              </div>
-
-              <div class="item-total">
-                {{ formatNumber(itemTotalCost(item)) }}₫
-              </div>
-
-              <button
-                type="button"
-                @click="removeItem(idx)"
-                class="btn-remove"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div class="order-summary">
-              <div class="summary-row">
-                <span class="summary-label">Tổng Chi Phí:</span>
-                <span class="summary-value">{{ formatNumber(totalCost) }}₫</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button
-              type="button"
-              @click="clearCart"
-              class="btn-secondary"
-              :disabled="cartItems.length === 0"
-            >
-              🗑 Xóa Hết
-            </button>
-            <button
-              type="submit"
-              class="btn-submit"
-              :disabled="loading || cartItems.length === 0"
-            >
-              {{ loading ? 'Đang lưu...' : '✓ Hoàn Tất Đơn Hàng' }}
-            </button>
-          </div>
+          <ProductCart
+            :barcode-input="barcodeInput"
+            :cart-items="cartItems"
+            :is-loading="loading"
+            :barcode-input-ref="barcodeInputRef"
+            @update:barcode-input="barcodeInput = $event"
+            @add-product-by-barcode="addProductByBarcode"
+            @decrease-qty="decreaseQty"
+            @increase-qty="increaseQty"
+            @qty-change="refreshAllocationsForIndex"
+            @remove-item="removeItem"
+            @clear-cart="clearCart"
+            @submit="submitOrder"
+          />
         </form>
 
         <div v-if="message" :class="['message', message.type]">
           {{ message.text }}
         </div>
 
-        <div class="return-container">
-          <div class="return-btn-wrap">
-            <div class="return-title">Chế độ quét trả hàng</div>
-            <div>
-              <button
-                :class="['toggle-btn', { off: !turnOnReturn }]"
-                @click="toggleReturn"
-              >
-                {{ turnOnReturn ? 'Bật' : 'Tắt' }}
-              </button>
-            </div>
-          </div>
-          <ReturnOrder
-            v-if="turnOnReturn"
-            :orders="orderHistory"
-            :order-products-map="orderItemsMap"
-            :onReturn="handleReturnOrder"
-          />
-        </div>
+        <ReturnOrderSection
+          :is-active="turnOnReturn"
+          :orders="orderHistory"
+          :order-products-map="orderItemsMap"
+          @toggle="toggleReturn"
+          @return="handleReturnOrder"
+        />
       </div>
 
       <OrdersHistorySection
@@ -246,27 +81,13 @@
     </div>
   </div>
 
-
-  <transition name="fade">
-    <div v-if="isScanningOrderCode" class="scanner-overlay">
-      <div class="scanner-modal" :class="{ 'scanner-modal--compact': isScanningOrderCode }">
-        <div class="scanner-header">
-          <div class="scanner-title">Quét mã vận đơn (QR)</div>
-          <button type="button" class="scanner-close" @click="stopOrderCodeScanner">✕</button>
-        </div>
-        <div class="scanner-body">
-          <div class="scanner-content">
-            <video ref="orderCodeVideoRef" class="scanner-video" autoplay muted playsinline></video>
-            <div class="scanner-status">{{ orderCodeScannerStatus || 'Đang quét...' }}</div>
-            <div v-if="orderCodeScannerError" class="scanner-error">{{ orderCodeScannerError }}</div>
-          </div>
-        </div>
-        <div class="scanner-footer">
-          <button type="button" class="btn-secondary" @click="stopOrderCodeScanner">Tắt camera</button>
-        </div>
-      </div>
-    </div>
-  </transition>
+  <OrderCodeScanner
+    :is-scanning="isScanningOrderCode"
+    :scanner-status="orderCodeScannerStatus"
+    :scanner-error="orderCodeScannerError"
+    :video-ref="orderCodeVideoRef"
+    @stop="stopOrderCodeScanner"
+  />
 </template>
 
 <script setup>
@@ -275,7 +96,10 @@ import jsQR from 'jsqr';
 import { importsAPI, ordersAPI, soldAPI, externalOrdersAPI } from '@/services/api';
 import { generateUniqueId } from '@/services/api';
 import OrdersHistorySection from './OrdersHistorySection.vue';
-import ReturnOrder from '@/modules/order/ReturnOrder.vue';
+import OrderFormHeader from './OrderFormHeader.vue';
+import ProductCart from './ProductCart.vue';
+import OrderCodeScanner from './OrderCodeScanner.vue';
+import ReturnOrderSection from './ReturnOrderSection.vue';
 
 function getLocalDateTimeString(date = new Date()) {
   const tzOffset = date.getTimezoneOffset() * 60000;
@@ -1217,337 +1041,16 @@ onBeforeUnmount(() => {
   margin-bottom: 16px;
 }
 
-.subsection-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #2d5016;
-  margin: 20px 0 12px 0;
-  padding-top: 16px;
-  border-top: 1px solid #eee;
-}
-
 .order-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-}
-
-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #555;
-}
-
-.input-field {
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 16px;
-  font-family: inherit;
-  transition: border-color 0.2s;
-}
-
-.input-field:focus {
-  outline: none;
-  border-color: #86c06b;
-  box-shadow: 0 0 0 3px rgba(134, 192, 107, 0.1);
-}
-
-.input-with-action {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.input-with-action--double {
-  grid-template-columns: 2fr 1fr 1fr 1fr;
-  gap: 6px;
-}
-
-.btn-scan {
-  padding: 10px 8px;
-  border: 1px solid #86c06b;
-  background: #ecfdf3;
-  color: #166534;
-  border-radius: 8px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-scan:hover:not(:disabled) {
-  background: #d1f7df;
-}
-
-.btn-scan:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.empty-cart {
-  padding: 24px;
-  text-align: center;
-  color: #999;
-  font-size: 15px;
-  background: #fafaf9;
-  border-radius: 8px;
-  border: 1px dashed #ddd;
-}
-
-.cart-items {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  background: #fafaf9;
-  border-radius: 8px;
-  border: 1px solid #eee;
-}
-
-.cart-item {
-  display: grid;
-  grid-template-columns: 1fr 120px 100px 40px;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #eee;
-}
-
-.item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.item-name {
-  font-weight: 600;
-  color: #2d5016;
-  font-size: 16px;
-}
-
-.item-details {
-  font-size: 13px;
-  color: #666;
-}
-
-.item-available {
-  font-size: 13px;
-  color: #374151;
-}
-
-.item-cost {
-  font-size: 13px;
-  color: #86c06b;
-  font-weight: 500;
-}
-
-/* Chips to indicate batch/product and unit cost */
-.item-chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-weight: 600;
-  font-size: 12px;
-  border: 1px solid transparent;
-}
-
-.chip-id {
-  background: #eef2ff;
-  color: #3730a3;
-  border-color: #c7d2fe;
-}
-
-.chip-cost {
-  background: #dcfce7;
-  color: #166534;
-  border-color: #bbf7d0;
-}
-
-.chip-alloc {
-  background: #dcfce7;
-  color: #166534;
-  border-color: #bbf7d0;
-}
-
-.item-qty {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 4px;
-}
-
-.btn-qty {
-  padding: 4px 6px;
-  background: #f3f4f6;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.btn-qty:hover:not(:disabled) {
-  background: #86c06b;
-  color: white;
-}
-
-.btn-qty:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.qty-input {
-  flex: 1;
-  border: none;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 4px;
-}
-
-.qty-input::-webkit-outer-spin-button,
-.qty-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.qty-input[type='number'] {
-  -moz-appearance: textfield;
-}
-
-.item-total {
-  text-align: right;
-  font-weight: 600;
-  color: #2d5016;
-  font-size: 16px;
-}
-
-.btn-remove {
-  padding: 4px 8px;
-  background: #fee2e2;
-  color: #991b1b;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.btn-remove:hover {
-  background: #fecaca;
-}
-
-.order-summary {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 2px solid #eee;
-}
-
-.summary-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 16px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #2d5016;
-}
-
-.summary-label {
-  color: #666;
-}
-
-.summary-value {
-  color: #86c06b;
-  font-size: 17px;
-}
-
-.form-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.btn-submit,
-.btn-secondary {
-  flex: 1;
-  padding: 12px 16px;
-  border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.input-with-action--double .btn-secondary {
-  padding: 10px 8px;
-  font-size: 14px;
-}
-
-.btn-submit {
-  background: linear-gradient(135deg, #86c06b 0%, #6db046 100%);
-  color: white;
-}
-
-.btn-submit:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(134, 192, 107, 0.3);
-}
-
-.btn-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #f3f4f6;
-  border: 1px solid #ddd;
-  color: #555;
-}
-
-.btn-auto-scan {
-  /* Removed min-width to allow equal sizing */
-}
-
-.btn-secondary.btn-active {
-  background: #d1f7df;
-  border-color: #86c06b;
-  color: #166534;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #e5e7eb;
-}
-
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .message {
@@ -1569,355 +1072,6 @@ label {
   color: #991b1b;
   border: 1px solid #fecaca;
 }
-.return-container{
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-top: 12px;
-  font-size: 14px;
-  font-weight: 500;
-  display: flex;
-  flex-direction: column;
-  
-}
-.return-btn-wrap{
-  display: flex;
-  align-items: center;
-}
-
-.return-btn-wrap > div{
-  margin-right: 10px;
-}
-
-.return-title{
-  font-size: 15px;
-  font-weight: 600;
-}
-.toggle-btn {
-  padding: 12px 24px;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-
-  /* Mặc định là ĐANG BẬT */
-  background: #86c06b;
-  color: #14532d;
-  box-shadow: 0 6px 15px rgba(134, 192, 107, 0.3);
-}
-
-.toggle-btn:hover {
-  transform: translateY(-2px);
-}
-
-/* Khi TẮT */
-.toggle-btn.off {
-  background: #e5e7eb;     /* nhạt hơn */
-  color: #4b5563;
-  box-shadow: none;
-  opacity: 0.7;
-}
-
-/* Hover khi tắt */
-.toggle-btn.off:hover {
-  background: #d1d5db;
-}
-
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.filter-group label {
-  font-size: 13px;
-  color: #4b5563;
-}
-
-.filter-input {
-  padding: 8px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.filter-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.btn-secondary.small {
-  padding: 8px 10px;
-  font-size: 13px;
-}
-
-.btn-refresh {
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid #cbd5f5;
-  background: #eef2ff;
-  color: #3730a3;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-refresh:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-refresh:not(:disabled):hover {
-  background: #dbe4ff;
-}
-
-.history-empty {
-  padding: 24px;
-  text-align: center;
-  color: #6b7280;
-  border: 1px dashed #d1d5db;
-  border-radius: 10px;
-  background: #f9fafb;
-}
-
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.history-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 16px;
-  background: #fdfdfc;
-}
-
-.history-card-main {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.history-card-info {
-  flex: 1;
-}
-
-.history-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.history-order-code {
-  font-size: 18px;
-  font-weight: 700;
-  color: #14532d;
-}
-
-.history-info-row {
-  margin-top: 6px;
-  font-size: 13px;
-  color: #4b5563;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.btn-return {
-  border: 1px solid #fcd34d;
-  background: #fef3c7;
-  color: #92400e;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-return:hover:not(:disabled) {
-  background: #fde68a;
-}
-
-.btn-return:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-toggle {
-  border: none;
-  background: #86c06b;
-  color: white;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-toggle:hover {
-  background: #6db046;
-}
-
-.history-details {
-  margin-top: 12px;
-  border-top: 1px solid #e5e7eb;
-  padding-top: 12px;
-}
-
-.history-products {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.history-product {
-  display: grid;
-  grid-template-columns: 2fr 1fr 100px;
-  gap: 12px;
-  padding: 10px;
-  border-radius: 8px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-}
-
-.history-product-name {
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.history-product-meta {
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 4px;
-}
-
-.history-product-qty,
-.history-product-total {
-  display: flex;
-  align-items: center;
-  font-weight: 600;
-  color: #374151;
-  font-size: 14px;
-}
-
-.history-empty-products {
-  padding: 12px;
-  background: #fef3c7;
-  border: 1px dashed #fcd34d;
-  color: #92400e;
-  border-radius: 8px;
-  font-size: 13px;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.scanner-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 16px;
-  z-index: 2000;
-}
-
-.scanner-modal {
-  background: #fff;
-  width: 100%;
-  max-width: 520px;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.scanner-modal--compact {
-  max-width: 360px;
-}
-
-.scanner-modal--compact .scanner-body {
-  padding: 12px;
-}
-
-.scanner-modal--compact .scanner-video {
-  aspect-ratio: 4 / 3;
-}
-
-.scanner-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.scanner-title {
-  font-weight: 700;
-  color: #14532d;
-}
-
-.scanner-close {
-  border: none;
-  background: transparent;
-  font-size: 18px;
-  cursor: pointer;
-}
-
-.scanner-body {
-  padding: 16px;
-}
-
-.scanner-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.scanner-video {
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  background: #0f172a;
-  border-radius: 12px;
-  object-fit: cover;
-}
-
-.scanner-status {
-  font-size: 14px;
-  color: #374151;
-  text-align: center;
-}
-
-.scanner-error {
-  margin-top: 6px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #fef2f2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
-  font-size: 13px;
-  text-align: center;
-}
-
-.scanner-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 12px 16px;
-  border-top: 1px solid #e5e7eb;
-}
 
 @media (max-width: 768px) {
   .orders-layout {
@@ -1927,42 +1081,11 @@ label {
   .form-row {
     grid-template-columns: 1fr;
   }
-
-  .cart-item {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .item-qty {
-    width: 100%;
-  }
-
-  .item-total {
-    text-align: left;
-  }
-
-  .history-card-main {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .history-product {
-    grid-template-columns: 1fr;
-  }
-
-  .history-info-row {
-    flex-direction: column;
-    gap: 6px;
-  }
 }
 
 @media (max-width: 640px) {
   .orders-container {
     padding: 12px;
-  }
-
-  .cart-item {
-    grid-template-columns: 1fr;
   }
 }
 </style>
