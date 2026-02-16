@@ -208,6 +208,26 @@
         <div v-if="message" :class="['message', message.type]">
           {{ message.text }}
         </div>
+
+        <div class="return-container">
+          <div class="return-btn-wrap">
+            <div class="return-title">Chế độ quét trả hàng</div>
+            <div>
+              <button
+                :class="['toggle-btn', { off: !turnOnReturn }]"
+                @click="toggleReturn"
+              >
+                {{ turnOnReturn ? 'Bật' : 'Tắt' }}
+              </button>
+            </div>
+          </div>
+          <ReturnOrder
+            v-if="turnOnReturn"
+            :orders="orderHistory"
+            :order-products-map="orderItemsMap"
+            :onReturn="handleReturnOrder"
+          />
+        </div>
       </div>
 
       <OrdersHistorySection
@@ -222,8 +242,10 @@
         @toggle-order="toggleOrderDetails"
         @return-order="handleReturnOrder"
       />
+
     </div>
   </div>
+
 
   <transition name="fade">
     <div v-if="isScanningOrderCode" class="scanner-overlay">
@@ -253,6 +275,7 @@ import jsQR from 'jsqr';
 import { importsAPI, ordersAPI, soldAPI, externalOrdersAPI } from '@/services/api';
 import { generateUniqueId } from '@/services/api';
 import OrdersHistorySection from './OrdersHistorySection.vue';
+import ReturnOrder from '@/modules/order/ReturnOrder.vue';
 
 function getLocalDateTimeString(date = new Date()) {
   const tzOffset = date.getTimezoneOffset() * 60000;
@@ -260,7 +283,14 @@ function getLocalDateTimeString(date = new Date()) {
   return localISO.slice(0, 16);
 }
 
+//trả hàng 
 
+const turnOnReturn = ref(false)
+
+
+function toggleReturn(){
+  turnOnReturn.value = !turnOnReturn.value
+}
 
 const orderForm = ref({
   customer_name: '',
@@ -973,74 +1003,164 @@ function markReturned(orderCode) {
   returnedOrders.value = next;
 }
 
-async function handleReturnOrder(orderCode) {
-  if (!orderCode || isReturning(orderCode) || isReturned(orderCode)) return;
+async function handleReturnOrder(orderCodes) {
+  if (!orderCodes) return;
 
-  const items = orderProducts(orderCode);
-  if (!items || items.length === 0) {
-    showMessage('Đơn này không có sản phẩm để trả hàng', 'error');
-    return;
-  }
+  // Chuẩn hóa về array
+  const codes = Array.isArray(orderCodes)
+    ? orderCodes
+    : [orderCodes];
 
-  const confirmed = confirm('Xác nhận trả hàng/hoàn đơn? Hệ thống sẽ cộng lại tồn kho.');
+  const confirmed = confirm(
+    `Xác nhận trả ${codes.length} đơn? Hệ thống sẽ cộng lại tồn kho.`
+  );
   if (!confirmed) return;
 
-  addReturning(orderCode);
   try {
-    await loadImports(); // lấy dữ liệu tồn kho mới nhất
+    await loadImports(); // lấy tồn kho mới nhất
 
-    const qtyByProduct = {};
-    for (const item of items) {
-      if (!item.productID) continue;
-      const pid = String(item.productID);
-      qtyByProduct[pid] = (qtyByProduct[pid] || 0) + (Number(item.qty_sold) || 0);
+    const allQtyByProduct = {};
+    const soldRowsToDelete = [];
+    const orderRowsToDelete = [];
+
+    for (const orderCode of codes) {
+      if (
+        !orderCode ||
+        isReturning(orderCode) ||
+        isReturned(orderCode)
+      )
+        continue;
+
+      addReturning(orderCode);
+
+      const items = orderProducts(orderCode);
+      if (!items || items.length === 0) continue;
+
+      // Gom tổng số lượng trả theo productID
+      for (const item of items) {
+        if (!item.productID) continue;
+
+        const pid = String(item.productID);
+        const qty = Number(item.qty_sold) || 0;
+
+        allQtyByProduct[pid] =
+          (allQtyByProduct[pid] || 0) + qty;
+      }
+
+      // Gom sold rows để xóa
+      soldHistory.value
+        .filter((s) => String(s.order_code) === String(orderCode))
+        .forEach((s) => {
+          if (Number.isInteger(s.rowIndex)) {
+            soldRowsToDelete.push(s.rowIndex);
+          }
+        });
+
+      // Gom order row để xóa
+      const orderRowIndex = (
+        orderHistory.value.find(
+          (o) => o.order_code === orderCode
+        ) || {}
+      ).rowIndex;
+
+      if (orderRowIndex) {
+        orderRowsToDelete.push(orderRowIndex);
+      }
     }
 
+    // ===== Update tồn kho =====
     const updates = [];
-    for (const [productID, qtyReturn] of Object.entries(qtyByProduct)) {
-      const importRowData = imports.value.find((imp) => String(imp[0]) === productID);
+
+    for (const [productID, qtyReturn] of Object.entries(allQtyByProduct)) {
+      const importRowData = imports.value.find(
+        (imp) => String(imp[0]) === productID
+      );
       if (!importRowData) continue;
 
-      const rowIndex = imports.value.indexOf(importRowData) + 2; // 1-based + header
+      const rowIndex =
+        imports.value.indexOf(importRowData) + 2;
+
       const totalQty = parseInt(importRowData[5], 10) || 0;
-      const currentQtySold = parseInt(importRowData[10], 10) || 0;
+      const currentQtySold =
+        parseInt(importRowData[10], 10) || 0;
+
       const qtyToDeduct = Math.min(qtyReturn, currentQtySold);
-      const newQtySold = Math.max(0, currentQtySold - qtyToDeduct);
-      const newAvailableQty = Math.max(0, totalQty - newQtySold);
+      const newQtySold = Math.max(
+        0,
+        currentQtySold - qtyToDeduct
+      );
+      const newAvailableQty = Math.max(
+        0,
+        totalQty - newQtySold
+      );
+
+      const oldAvailableQty = Math.max(
+        0,
+        totalQty - currentQtySold
+      );
+
+      const productName = importRowData[3]; // cột tên sản phẩm (nếu khác thì đổi index)
+
+      const increase = newAvailableQty - oldAvailableQty;
 
       updates.push({
         row: rowIndex,
-        data: { qty_sold: newQtySold, available_qty: newAvailableQty },
+        productID,
+        productName,
+        oldAvailableQty,
+        newAvailableQty,
+        increase,
+        data: {
+          qty_sold: newQtySold,
+          available_qty: newAvailableQty,
+        },
       });
     }
 
     if (updates.length === 0) {
-      showMessage('Không tìm thấy sản phẩm tương ứng để cộng lại tồn kho', 'error');
+      showMessage(
+        "Không tìm thấy sản phẩm tương ứng để cộng lại tồn kho",
+        "error"
+      );
       return;
     }
 
     await importsAPI.updateRows(updates);
     applyLocalImportUpdates(updates);
-    // Xóa các dòng sold đã ghi cho đơn
-    const soldRowsToDelete = (soldHistory.value || [])
-      .filter((s) => String(s.order_code) === String(orderCode))
-      .map((s) => s.rowIndex)
-      .filter((r) => Number.isInteger(r));
+    const detailMessages = updates.map(u => {
+      return `${u.productName} (${u.productID})
+    Tăng: +${u.increase}
+    ${u.oldAvailableQty} → ${u.newAvailableQty}`;
+    });
+
+    alert(
+      `ĐÃ CẬP NHẬT TỒN KHO\n\n` +
+      detailMessages.join("\n\n")
+    );
     if (soldRowsToDelete.length > 0) {
       await soldAPI.deleteRows(soldRowsToDelete);
     }
-    // Xóa luôn dòng order để không thể nhập lại
-    const orderRowIndex = (orderHistory.value.find((o) => o.order_code === orderCode) || {}).rowIndex;
-    if (orderRowIndex) {
-      await ordersAPI.deleteRows([orderRowIndex]);
+
+    if (orderRowsToDelete.length > 0) {
+      await ordersAPI.deleteRows(orderRowsToDelete);
     }
-    showMessage('Đã trả hàng, cộng lại tồn kho và xoá đơn', 'success');
-    markReturned(orderCode);
+
+    showMessage(
+      `Đã trả ${codes.length} đơn và cập nhật tồn kho`,
+      "success"
+    );
+
     await Promise.all([loadImports(), loadOrderHistory()]);
   } catch (error) {
-    showMessage('Trả hàng thất bại: ' + error.message, 'error');
+    showMessage(
+      "Trả hàng thất bại: " + error.message,
+      "error"
+    );
   } finally {
-    removeReturning(orderCode);
+    for (const code of codes) {
+      removeReturning(code);
+      markReturned(code);
+    }
   }
 }
 
@@ -1449,31 +1569,59 @@ label {
   color: #991b1b;
   border: 1px solid #fecaca;
 }
-
-.history-section {
-  margin-top: 0;
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+.return-container{
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 500;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  
 }
-
-.history-header {
+.return-btn-wrap{
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
 }
 
-.history-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-  align-items: end;
+.return-btn-wrap > div{
+  margin-right: 10px;
+}
+
+.return-title{
+  font-size: 15px;
+  font-weight: 600;
+}
+.toggle-btn {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  /* Mặc định là ĐANG BẬT */
+  background: #86c06b;
+  color: #14532d;
+  box-shadow: 0 6px 15px rgba(134, 192, 107, 0.3);
+}
+
+.toggle-btn:hover {
+  transform: translateY(-2px);
+}
+
+/* Khi TẮT */
+.toggle-btn.off {
+  background: #e5e7eb;     /* nhạt hơn */
+  color: #4b5563;
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+/* Hover khi tắt */
+.toggle-btn.off:hover {
+  background: #d1d5db;
 }
 
 .filter-group {
