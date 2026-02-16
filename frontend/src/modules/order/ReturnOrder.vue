@@ -2,28 +2,43 @@
   <div class="return-container">
     <h2>Quét mã đơn để trả hàng</h2>
 
-    <!-- Ô quét -->
-    <input 
-      v-model="scanCode"
-      @keyup.enter="handleScan"
-      placeholder="Quét hoặc nhập mã đơn..."
-      class="scan-input"
-    />
+    <!-- Vùng nhập + quét -->
+    <div class="scan-wrapper">
+      <!-- Input -->
+      <div style="display: flex; flex-direction: column;">
+        <input
+          ref="scanInputRef"
+          v-model="scanCode"
+          @keyup.enter="handleScan"
+          placeholder="Quét hoặc nhập mã đơn..."
+          class="scan-input"
+        />
+        <p v-if="errorMessage" class="error-message">
+          {{ errorMessage }}
+        </p>
+      </div>
+      <!-- QR Scanner -->
+      <QRScanner
+        v-model:text="scanCode"
+        class="qr-btn"
+        @scanned="handleScan"
+      />
+    </div>
 
     <!-- Danh sách đã quét -->
     <OrderCard
-    v-for="order in scannedOrders"
-    :key="order.order_code"
-    :order="order"
+      v-for="order in scannedOrders"
+      :key="order.order_code"
+      :order="order"
     >
-    <template #actions>
+      <template #actions>
         <button
-        class="remove-btn"
-        @click="removeOrder(order.order_code)"
+          class="remove-btn"
+          @click="removeOrder(order.order_code)"
         >
-        ✕
+          ✕
         </button>
-    </template>
+      </template>
     </OrderCard>
 
     <!-- Nút trả toàn bộ -->
@@ -40,7 +55,7 @@
 <script setup>
 import { ref } from 'vue'
 import OrderCard from '@/modules/order/OrderCard.vue'
-
+import QRScanner from '@/modules/shared/QRScanner.vue'
 const props = defineProps({
   orders: Array,
   orderProductsMap: Object,
@@ -48,8 +63,10 @@ const props = defineProps({
 })
 
 const scanCode = ref('')
+const scanInputRef = ref(null)
 const scannedOrders = ref([])
-
+const errorMessage = ref('')
+let errorTimeout = null
 function buildOrder(order) {
   return {
     ...order,
@@ -57,7 +74,22 @@ function buildOrder(order) {
       props.orderProductsMap?.[order.order_code] || []
   }
 }
+function focusOrderCode(){
+  if (scanInputRef.value){
+    scanInputRef.value.focus()
+  }
+}
+function showError(message) {
+  errorMessage.value = message
 
+  if (errorTimeout) {
+    clearTimeout(errorTimeout)
+  }
+
+  errorTimeout = setTimeout(() => {
+    errorMessage.value = ''
+  }, 3000) // 3 giây tự tắt
+}
 function handleScan() {
   const code = scanCode.value.trim()
   if (!code) return
@@ -69,9 +101,10 @@ function handleScan() {
   if (found) {
     if (!scannedOrders.value.some(o => o.order_code === code)) {
       scannedOrders.value.push(buildOrder(found))
+      focusOrderCode()
     }
   } else {
-    alert('Không tìm thấy đơn hàng')
+    showError('Không tìm thấy đơn hàng')
   }
 
   scanCode.value = ''
@@ -109,15 +142,29 @@ function returnFullOrder() {
   font-weight: 700;
   letter-spacing: 1px;
 }
-.scan-input {
-  width: 100%;
-  padding: 10px;
+.scan-wrapper {
+  display: flex;
+  gap: 10px;
+  align-items: center;
   margin-bottom: 20px;
-  font-size: 16px;
-  border-radius: 13px;
+}
+.scan-input {
+  flex: 1;
+  padding: 10px;
+  font-size: 15px;
+  border-radius: 8px;
+  border: 1px solid #86c06b;
+  outline: none;
 
 }
+.scan-input:focus {
+  border-color: #14532d;
+  box-shadow: 0 0 0 2px rgba(134, 192, 107, 0.3);
+}
 
+.qr-btn {
+  flex-shrink: 0;
+}
 .order-card {
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -175,5 +222,16 @@ function returnFullOrder() {
 
 .return-all-btn:hover {
   background: #1677cc;
+}
+.error-message {
+  color: #ff4d4f;
+  font-size: 14px;
+  margin-top: 6px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0 }
+  to { opacity: 1 }
 }
 </style>

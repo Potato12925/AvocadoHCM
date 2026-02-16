@@ -210,12 +210,17 @@
         </div>
 
         <div class="return-container">
-          <button
-            :class="['toggle-btn', { off: !turnOnReturn }]"
-            @click="toggleReturn"
-          >
-            {{ turnOnReturn ? 'Tắt' : 'Bật' }} chế độ trả hàng liên tục
-          </button>
+          <div class="return-btn-wrap">
+            <div class="return-title">Chế độ quét trả hàng</div>
+            <div>
+              <button
+                :class="['toggle-btn', { off: !turnOnReturn }]"
+                @click="toggleReturn"
+              >
+                {{ turnOnReturn ? 'Bật' : 'Tắt' }}
+              </button>
+            </div>
+          </div>
           <ReturnOrder
             v-if="turnOnReturn"
             :orders="orderHistory"
@@ -1089,8 +1094,22 @@ async function handleReturnOrder(orderCodes) {
         totalQty - newQtySold
       );
 
+      const oldAvailableQty = Math.max(
+        0,
+        totalQty - currentQtySold
+      );
+
+      const productName = importRowData[3]; // cột tên sản phẩm (nếu khác thì đổi index)
+
+      const increase = newAvailableQty - oldAvailableQty;
+
       updates.push({
         row: rowIndex,
+        productID,
+        productName,
+        oldAvailableQty,
+        newAvailableQty,
+        increase,
         data: {
           qty_sold: newQtySold,
           available_qty: newAvailableQty,
@@ -1108,7 +1127,16 @@ async function handleReturnOrder(orderCodes) {
 
     await importsAPI.updateRows(updates);
     applyLocalImportUpdates(updates);
+    const detailMessages = updates.map(u => {
+      return `${u.productName} (${u.productID})
+    Tăng: +${u.increase}
+    ${u.oldAvailableQty} → ${u.newAvailableQty}`;
+    });
 
+    alert(
+      `ĐÃ CẬP NHẬT TỒN KHO\n\n` +
+      detailMessages.join("\n\n")
+    );
     if (soldRowsToDelete.length > 0) {
       await soldAPI.deleteRows(soldRowsToDelete);
     }
@@ -1551,7 +1579,19 @@ label {
   flex-direction: column;
   
 }
+.return-btn-wrap{
+  display: flex;
+  align-items: center;
+}
 
+.return-btn-wrap > div{
+  margin-right: 10px;
+}
+
+.return-title{
+  font-size: 15px;
+  font-weight: 600;
+}
 .toggle-btn {
   padding: 12px 24px;
   font-size: 15px;
