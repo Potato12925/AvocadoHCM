@@ -19,20 +19,20 @@
         type="text"
         id="orderCode"
         placeholder="Để trống để tự sinh"
-        ref="orderCodeRef"
+        :ref="orderCodeRef"
+        @input="emitOrderCodeChange"
         @keyup.enter="emitOrderCodeEnter"
         @focus="emitOrderCodeFocus"
         :disabled="isExternalOrder"
         class="input-field"
       />
-      <button
-        type="button"
+      <QRScanner
+        ref="qrScannerRef"
+        v-model:text="localOrderCode"
         class="btn-scan"
-        @click="emitStartScanner"
-        :disabled="isScanningOrderCode || isExternalOrder"
-      >
-        📷
-      </button>
+        :disabled="isExternalOrder"
+        @scanned="handleScannerScanned"
+      />
       <button
         type="button"
         class="btn-secondary btn-auto-scan"
@@ -88,6 +88,7 @@
 
 <script setup>
 import { ref, watch } from 'vue';
+import QRScanner from '@/modules/shared/QRScanner.vue';
 
 const props = defineProps({
   customerName: String,
@@ -97,7 +98,6 @@ const props = defineProps({
   packageDateMode: String,
   autoScanOrderCode: Boolean,
   isExternalOrder: Boolean,
-  isScanningOrderCode: Boolean,
   orderCodeRef: Object,
 });
 
@@ -107,7 +107,6 @@ const emit = defineEmits([
   'update:packageDate',
   'orderCodeEnter',
   'orderCodeFocus',
-  'startScanner',
   'toggleAutoScan',
   'toggleExternalOrder',
   'setPackageDateNow',
@@ -117,6 +116,7 @@ const emit = defineEmits([
 const localCustomerName = ref(props.customerName || '');
 const localOrderCode = ref(props.orderCode || '');
 const localPackageDate = ref(props.packageDate || '');
+const qrScannerRef = ref(null);
 
 watch(() => props.customerName, (newVal) => {
   localCustomerName.value = newVal || '';
@@ -128,6 +128,19 @@ watch(() => props.orderCode, (newVal) => {
 
 watch(() => props.packageDate, (newVal) => {
   localPackageDate.value = newVal || '';
+});
+
+watch(() => props.autoScanOrderCode, (enabled) => {
+  const inputEl = props.orderCodeRef?.value;
+  if (enabled && inputEl && document.activeElement === inputEl && !props.isExternalOrder) {
+    qrScannerRef.value?.startScanner?.();
+  }
+});
+
+watch(() => props.isExternalOrder, (external) => {
+  if (external) {
+    qrScannerRef.value?.stopScanner?.();
+  }
 });
 
 const emitCustomerNameChange = () => {
@@ -149,10 +162,9 @@ const emitOrderCodeEnter = () => {
 
 const emitOrderCodeFocus = () => {
   emit('orderCodeFocus');
-};
-
-const emitStartScanner = () => {
-  emit('startScanner');
+  if (props.autoScanOrderCode && !props.isExternalOrder) {
+    qrScannerRef.value?.startScanner?.();
+  }
 };
 
 const emitToggleAutoScan = () => {
@@ -169,6 +181,11 @@ const emitSetPackageDateNow = () => {
 
 const emitTogglePackageDatePicker = () => {
   emit('togglePackageDatePicker');
+};
+
+const handleScannerScanned = () => {
+  emitOrderCodeChange();
+  emit('orderCodeEnter');
 };
 </script>
 
@@ -213,23 +230,7 @@ label {
 }
 
 .btn-scan {
-  padding: 10px 8px;
-  border: 1px solid #86c06b;
-  background: #ecfdf3;
-  color: #166534;
-  border-radius: 8px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-scan:hover:not(:disabled) {
-  background: #d1f7df;
-}
-
-.btn-scan:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  display: flex;
 }
 
 .btn-secondary {

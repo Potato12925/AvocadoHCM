@@ -5,11 +5,11 @@
     <div class="form-group">
       <label for="barcodeInput">Quét/Nhập Barcode</label>
       <input
-        v-model="localBarcodeInput"
+        v-model="barcodeModel"
         type="text"
         id="barcodeInput"
         placeholder="Nhập hoặc quét mã barcode"
-        ref="barcodeInputRef"
+        ref="localBarcodeInputRef"
         @keyup.enter="emitAddProductByBarcode"
         class="input-field"
       />
@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import CartItemRow from './CartItemRow.vue';
 
 const props = defineProps({
@@ -70,7 +70,6 @@ const props = defineProps({
     default: () => [],
   },
   isLoading: Boolean,
-  barcodeInputRef: Object,
 });
 
 const emit = defineEmits([
@@ -84,10 +83,19 @@ const emit = defineEmits([
   'submit',
 ]);
 
-const localBarcodeInput = ref(props.barcodeInput || '');
+const localBarcodeInputRef = ref(null);
 
-watch(() => props.barcodeInput, (newVal) => {
-  localBarcodeInput.value = newVal || '';
+const barcodeModel = computed({
+  get: () => props.barcodeInput || '',
+  set: (value) => emit('update:barcodeInput', value),
+});
+
+function focusBarcodeInput() {
+  localBarcodeInputRef.value?.focus();
+}
+
+defineExpose({
+  focusBarcodeInput,
 });
 
 const totalCost = computed(() => {
@@ -100,8 +108,8 @@ function itemTotalCost(item) {
 }
 
 const emitAddProductByBarcode = () => {
-  emit('update:barcodeInput', localBarcodeInput.value);
   emit('addProductByBarcode');
+  barcodeModel.value = '';
 };
 
 const emitDecreaseQty = (idx) => {

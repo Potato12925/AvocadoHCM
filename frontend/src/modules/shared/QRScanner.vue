@@ -1,7 +1,7 @@
 <template>
   <div class="qr-wrapper">
-    <button class="scan-btn" @click="startScanner">
-      Quét QR
+    <button type="button" class="scan-btn" @click="startScanner" :disabled="disabled">
+      📷
     </button>
 
     <transition name="fade">
@@ -9,7 +9,7 @@
         <div class="scanner-modal">
           <div class="scanner-header">
             <div class="scanner-title">Quét mã QR</div>
-            <button class="scanner-close" @click="stopScanner">✕</button>
+            <button type="button" class="scanner-close" @click="stopScanner">✕</button>
           </div>
 
           <div class="scanner-body">
@@ -33,7 +33,7 @@
           </div>
 
           <div class="scanner-footer">
-            <button class="btn-secondary" @click="stopScanner">
+            <button type="button" class="btn-secondary" @click="stopScanner">
               Tắt camera
             </button>
           </div>
@@ -46,6 +46,13 @@
 <script setup>
 import { ref, nextTick, onBeforeUnmount } from 'vue'
 import jsQR from 'jsqr'
+
+defineProps({
+  disabled: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const emit = defineEmits(['update:text','scanned'])
 
@@ -140,6 +147,11 @@ function stopScanner() {
 onBeforeUnmount(() => {
   stopScanner()
 })
+
+defineExpose({
+  startScanner,
+  stopScanner
+})
 </script>
 
 <style scoped>
@@ -155,6 +167,11 @@ onBeforeUnmount(() => {
 
 .scan-btn:hover {
   background: #6fb457;
+}
+
+.scan-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Overlay */

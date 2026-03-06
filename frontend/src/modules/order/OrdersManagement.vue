@@ -21,14 +21,12 @@
               :package-date-mode="packageDateMode"
               :auto-scan-order-code="autoScanOrderCode"
               :is-external-order="isExternalOrder"
-              :is-scanning-order-code="isScanningOrderCode"
               :order-code-ref="orderCodeRef"
               @update:customer-name="orderForm.customer_name = $event"
               @update:order-code="orderForm.order_code = $event"
               @update:package-date="(val) => { orderForm.package_date = val; packageDateTouched = true; }"
               @order-code-enter="handleOrderCodeEnter"
               @order-code-focus="handleOrderCodeFocus"
-              @start-scanner="startOrderCodeScanner"
               @toggle-auto-scan="toggleOrderCodeAutoScan"
               @toggle-external-order="toggleExternalOrder"
               @set-package-date-now="setPackageDateNow"
@@ -37,11 +35,10 @@
           </div>
 
           <ProductCart
-            :barcode-input="barcodeInput"
+            ref="productCartRef"
+            v-model:barcode-input="barcodeInput"
             :cart-items="cartItems"
             :is-loading="loading"
-            :barcode-input-ref="barcodeInputRef"
-            @update:barcode-input="barcodeInput = $event"
             @add-product-by-barcode="addProductByBarcode"
             @decrease-qty="decreaseQty"
             @increase-qty="increaseQty"
@@ -80,25 +77,15 @@
 
     </div>
   </div>
-
-  <OrderCodeScanner
-    :is-scanning="isScanningOrderCode"
-    :scanner-status="orderCodeScannerStatus"
-    :scanner-error="orderCodeScannerError"
-    :video-ref="orderCodeVideoRef"
-    @stop="stopOrderCodeScanner"
-  />
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import jsQR from 'jsqr';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { importsAPI, ordersAPI, soldAPI, externalOrdersAPI } from '@/services/api';
 import { generateUniqueId } from '@/services/api';
 import OrdersHistorySection from './OrdersHistorySection.vue';
 import OrderFormHeader from './OrderFormHeader.vue';
 import ProductCart from './ProductCart.vue';
-import OrderCodeScanner from './OrderCodeScanner.vue';
 import ReturnOrderSection from './ReturnOrderSection.vue';
 
 function getLocalDateTimeString(date = new Date()) {
@@ -127,7 +114,7 @@ const showPackageDatePicker = ref(false);
 const packageDateMode = ref('now');
 const barcodeInput = ref('');
 const orderCodeRef = ref(null);
-const barcodeInputRef = ref(null);
+const productCartRef = ref(null);
 const cartItems = ref([]);
 const imports = ref([]);
 const loading = ref(false);
@@ -138,25 +125,8 @@ const historyLoading = ref(false);
 const expandedOrders = ref(new Set());
 const returningOrders = ref(new Set());
 const returnedOrders = ref(new Set());
-const isScanningOrderCode = ref(false);
 const autoScanOrderCode = ref(false);
 const isExternalOrder = ref(false);
-const orderCodeVideoRef = ref(null);
-const orderCodeScannerError = ref('');
-const orderCodeScannerStatus = ref('');
-const ORDER_CODE_VIDEO_CONSTRAINTS = {
-  video: {
-    facingMode: { ideal: 'environment' },
-    advanced: [
-      // Gợi ý autofocus nếu webcam hỗ trợ
-      { focusMode: 'continuous' },
-    ],
-  },
-};
-let orderCodeStream = null;
-let orderCodeScanHandle = 0;
-let jsqrCanvas = null;
-let jsqrCtx = null;
 
 /**
  * Cập nhật cache imports.value theo danh sách updates (row 1-based, có header).
@@ -477,9 +447,7 @@ function handleOrderCodeEnter() {
 }
 
 function focusProductBarcode() {
-  if (barcodeInputRef.value) {
-    barcodeInputRef.value.focus();
-  }
+  productCartRef.value?.focusBarcodeInput?.();
 }
 
 function focusOrderCode() {
@@ -488,158 +456,12 @@ function focusOrderCode() {
   }
 }
 
-function resetOrderCodeScanner() {
-  if (orderCodeScanHandle) {
-    cancelAnimationFrame(orderCodeScanHandle);
-    orderCodeScanHandle = 0;
-  }
-  if (orderCodeStream) {
-    orderCodeStream.getTracks().forEach((t) => t.stop());
-    orderCodeStream = null;
-  }
-  if (orderCodeVideoRef.value) {
-    orderCodeVideoRef.value.srcObject = null;
-  }
-  orderCodeScannerStatus.value = '';
-  orderCodeScannerError.value = '';
-}
-
-function stopOrderCodeScanner() {
-  resetOrderCodeScanner();
-  isScanningOrderCode.value = false;
-}
-
-function prepareJsqrCanvas(videoEl) {
-  if (!jsqrCanvas) jsqrCanvas = document.createElement('canvas');
-  if (!jsqrCtx) jsqrCtx = jsqrCanvas.getContext('2d');
-  if (!jsqrCtx) return { width: 0, height: 0 };
-
-  const width = videoEl.videoWidth || videoEl.clientWidth || 0;
-  const height = videoEl.videoHeight || videoEl.clientHeight || 0;
-  if (width && height) {
-    jsqrCanvas.width = width;
-    jsqrCanvas.height = height;
-  }
-  return { width, height };
-}
-
-function detectWithJsqr() {
-  const videoEl = orderCodeVideoRef.value;
-  if (!videoEl) return '';
-  const { width, height } = prepareJsqrCanvas(videoEl);
-  if (!width || !height || !jsqrCtx) return '';
-  jsqrCtx.drawImage(videoEl, 0, 0, width, height);
-  const imageData = jsqrCtx.getImageData(0, 0, width, height);
-  const result = jsQR(imageData.data, width, height);
-  return result?.data || '';
-}
-
-async function tryImproveFocus() {
-  if (!orderCodeStream || typeof navigator === 'undefined') return;
-  const track = orderCodeStream.getVideoTracks()?.[0];
-  if (!track || !track.getCapabilities || !track.applyConstraints) return;
-
-  const caps = track.getCapabilities();
-  const constraint = {};
-
-  if (Array.isArray(caps.focusMode)) {
-    if (caps.focusMode.includes('continuous')) {
-      constraint.focusMode = 'continuous';
-    } else if (caps.focusMode.includes('single-shot')) {
-      constraint.focusMode = 'single-shot';
-    }
-  }
-
-  if (caps.focusDistance && typeof caps.focusDistance.min === 'number') {
-    constraint.focusDistance = caps.focusDistance.min;
-  }
-
-  if (caps.zoom && typeof caps.zoom.max === 'number') {
-    const targetZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min || 1, 1.5));
-    if (!Number.isNaN(targetZoom)) {
-      constraint.zoom = targetZoom;
-    }
-  }
-
-  if (Object.keys(constraint).length === 0) return;
-  try {
-    await track.applyConstraints({ advanced: [constraint] });
-  } catch (err) {
-    console.warn('applyConstraints focus/zoom failed:', err);
-  }
-}
-
-async function scanOrderCodeFrame() {
-  if (!isScanningOrderCode.value || !orderCodeVideoRef.value) return;
-  try {
-    const value = detectWithJsqr();
-    orderCodeScannerStatus.value = 'Đang quét (jsQR)...';
-
-    if (value) {
-      orderForm.value.order_code = value;
-      showMessage('Đã quét mã vận đơn', 'success');
-      stopOrderCodeScanner();
-      await nextTick();
-      handleOrderCodeEnter();
-      return;
-    }
-  } catch (error) {
-    console.error('Barcode detect error:', error);
-    orderCodeScannerError.value = error?.message || 'Không thể quét mã.';
-    stopOrderCodeScanner();
-    return;
-  }
-  orderCodeScanHandle = requestAnimationFrame(scanOrderCodeFrame);
-}
-
-async function startOrderCodeScanner() {
-  if (isScanningOrderCode.value) return;
-  resetOrderCodeScanner();
-  orderCodeScannerError.value = '';
-  orderCodeScannerStatus.value = 'Đang mở camera...';
-  isScanningOrderCode.value = true;
-  await nextTick();
-
-  try {
-    if (!jsQR) {
-      throw new Error('Không tải được thư viện jsQR để quét QR.');
-    }
-
-    orderCodeStream = await navigator.mediaDevices.getUserMedia(ORDER_CODE_VIDEO_CONSTRAINTS);
-    const videoEl = orderCodeVideoRef.value;
-    if (!videoEl) throw new Error('Không tìm thấy camera.');
-    videoEl.srcObject = orderCodeStream;
-    await videoEl.play();
-
-    const { width, height } = prepareJsqrCanvas(videoEl);
-    if (!width || !height) {
-      throw new Error('Không lấy được khung hình từ camera để quét QR.');
-    }
-
-    orderCodeScannerStatus.value = 'Đưa mã QR vào khung hình (jsQR, đang cố lấy nét)...';
-    await tryImproveFocus();
-    orderCodeScanHandle = requestAnimationFrame(scanOrderCodeFrame);
-  } catch (error) {
-    console.error('Start scanner error:', error);
-    orderCodeScannerError.value = error?.message || 'Không mở được camera.';
-    orderCodeScannerStatus.value = '';
-  }
-}
-
 function handleOrderCodeFocus() {
-  if (!autoScanOrderCode.value || isScanningOrderCode.value) return;
-  startOrderCodeScanner();
+  if (!autoScanOrderCode.value) return;
 }
 
 function toggleOrderCodeAutoScan() {
   autoScanOrderCode.value = !autoScanOrderCode.value;
-  if (!autoScanOrderCode.value) {
-    stopOrderCodeScanner();
-    return;
-  }
-  if (orderCodeRef.value && document.activeElement === orderCodeRef.value) {
-    startOrderCodeScanner();
-  }
 }
 
 function toggleExternalOrder() {
@@ -647,7 +469,6 @@ function toggleExternalOrder() {
   if (isExternalOrder.value) {
     // Tắt quét tự động khi bật chế độ đơn ngoài
     autoScanOrderCode.value = false;
-    stopOrderCodeScanner();
     orderForm.value.order_code = '';
   }
 }
@@ -762,7 +583,7 @@ async function submitOrder() {
         });
 
         const importRowData = imports.value.find((imp) => imp[0] === al.productID);
-        if (importRowData) {
+        if (importRowData) {  
           const rowIndex = imports.value.indexOf(importRowData) + 2; // 1-based, +1 for header
           const currentQtySold = parseInt(importRowData[10]) || 0;
           const newQtySold = currentQtySold + al.qty;
@@ -995,10 +816,6 @@ function formatNumber(num) {
 onMounted(() => {
   loadImports();
   loadOrderHistory();
-});
-
-onBeforeUnmount(() => {
-  stopOrderCodeScanner();
 });
 </script>
 
