@@ -486,13 +486,11 @@ async function submitOrder() {
     return;
   }
 
-
   if (!packageDateTouched.value || !orderForm.value.package_date) {
 
     orderForm.value.package_date = getLocalDateTimeString();
 
   }
-
 
   loading.value = true;
 

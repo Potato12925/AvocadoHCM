@@ -1,19 +1,24 @@
 <template>
-  <div class="form-group">
-    <label for="customerName">Tên Khách Hàng</label>
+  <div class="flex flex-col gap-1.5">
+    <label for="customerName" class="text-sm font-medium text-gray-600">
+      Tên Khách Hàng
+    </label>
     <input
       v-model="localCustomerName"
       type="text"
       id="customerName"
       placeholder="Tên khách hàng"
-      class="input-field"
+      class="px-3 py-2.5 border border-gray-300 rounded-lg text-base transition focus:outline-none focus:border-green-400 focus:ring-4 focus:ring-green-200/40"
       @input="emitCustomerNameChange"
     />
   </div>
 
-  <div class="form-group">
-    <label for="orderCode">Mã Vận Đơn</label>
-    <div class="input-with-action input-with-action--double">
+  <div class="flex flex-col gap-1.5">
+    <label for="orderCode" class="text-sm font-medium text-gray-600">
+      Mã Vận Đơn
+    </label>
+
+    <div class="grid grid-cols-[2fr_1fr_1fr_1fr] gap-1.5 items-center">
       <input
         v-model="localOrderCode"
         type="text"
@@ -24,29 +29,32 @@
         @keyup.enter="emitOrderCodeEnter"
         @focus="emitOrderCodeFocus"
         :disabled="isExternalOrder"
-        class="input-field"
+        class="px-3 py-2.5 border border-gray-300 rounded-lg text-base transition focus:outline-none focus:border-green-400 focus:ring-4 focus:ring-green-200/40 disabled:opacity-50 disabled:cursor-not-allowed"
       />
+
       <QRScanner
         ref="qrScannerRef"
         v-model:text="localOrderCode"
-        class="btn-scan"
+        class="flex"
         :disabled="isExternalOrder"
         @scanned="handleScannerScanned"
       />
+
       <button
         type="button"
-        class="btn-secondary btn-auto-scan"
+        class="px-2 py-2.5 bg-gray-100 border border-gray-300 text-gray-600 rounded-lg text-sm font-semibold transition hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        :class="autoScanOrderCode ? 'bg-green-100 border-green-400 text-green-800' : ''"
         @click="emitToggleAutoScan"
         :disabled="isExternalOrder"
-        :class="{ 'btn-active': autoScanOrderCode }"
       >
         {{ autoScanOrderCode ? 'ON' : 'OFF' }}
       </button>
+
       <button
         type="button"
-        class="btn-secondary"
+        class="px-2 py-2.5 bg-gray-100 border border-gray-300 text-gray-600 rounded-lg text-sm font-semibold transition hover:bg-gray-200"
+        :class="isExternalOrder ? 'bg-green-100 border-green-400 text-green-800' : ''"
         @click="emitToggleExternalOrder"
-        :class="{ 'btn-active': isExternalOrder }"
         title="Bật để tạo đơn ngoài (auto-generate mã vận đơn)"
       >
         {{ isExternalOrder ? 'ĐƠN NGOÀI' : 'SHOPEE' }}
@@ -54,26 +62,31 @@
     </div>
   </div>
 
-  <div class="form-group">
-    <label for="packageDate">Ngày giờ</label>
-    <div class="input-with-action">
+  <div class="flex flex-col gap-1.5">
+    <label for="packageDate" class="text-sm font-medium text-gray-600">
+      Ngày giờ
+    </label>
+
+    <div class="grid grid-cols-[1fr_1fr] gap-2 items-center">
       <button
         type="button"
-        class="btn-secondary"
-        :class="{ 'btn-active': packageDateMode === 'now' }"
+        class="px-4 py-2.5 bg-gray-100 border border-gray-300 text-gray-600 rounded-lg text-sm font-semibold transition hover:bg-gray-200"
+        :class="packageDateMode === 'now' ? 'bg-green-100 border-green-400 text-green-800' : ''"
         @click="emitSetPackageDateNow"
       >
         Hiện tại
       </button>
+
       <button
         type="button"
-        class="btn-secondary"
-        :class="{ 'btn-active': packageDateMode === 'custom' }"
+        class="px-4 py-2.5 bg-gray-100 border border-gray-300 text-gray-600 rounded-lg text-sm font-semibold transition hover:bg-gray-200"
+        :class="packageDateMode === 'custom' ? 'bg-green-100 border-green-400 text-green-800' : ''"
         @click="emitTogglePackageDatePicker"
       >
         {{ showPackageDatePicker ? 'Ẩn chọn ngày' : 'Chọn ngày' }}
       </button>
     </div>
+
     <input
       v-if="showPackageDatePicker"
       v-model="localPackageDate"
@@ -81,7 +94,7 @@
       id="packageDate"
       required
       @input="emitPackageDateChange"
-      class="input-field"
+      class="px-3 py-2.5 border border-gray-300 rounded-lg text-base transition focus:outline-none focus:border-green-400 focus:ring-4 focus:ring-green-200/40"
     />
   </div>
 </template>
@@ -238,79 +251,3 @@ defineExpose({
 });
 </script>
 
-<style scoped>
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #555;
-}
-
-.input-field {
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 16px;
-  font-family: inherit;
-  transition: border-color 0.2s;
-}
-
-.input-field:focus {
-  outline: none;
-  border-color: #86c06b;
-  box-shadow: 0 0 0 3px rgba(134, 192, 107, 0.1);
-}
-
-.input-with-action {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.input-with-action--double {
-  grid-template-columns: 2fr 1fr 1fr 1fr;
-  gap: 6px;
-}
-
-.btn-scan {
-  display: flex;
-}
-
-.btn-secondary {
-  padding: 12px 16px;
-  background: #f3f4f6;
-  border: 1px solid #ddd;
-  color: #555;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.input-with-action--double .btn-secondary {
-  padding: 10px 8px;
-  font-size: 14px;
-}
-
-.btn-secondary.btn-active {
-  background: #d1f7df;
-  border-color: #86c06b;
-  color: #166534;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #e5e7eb;
-}
-
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-</style>

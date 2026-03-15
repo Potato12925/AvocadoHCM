@@ -1,48 +1,3 @@
-<template>
-  <div class="qr-wrapper">
-    <button type="button" class="scan-btn" @click="startScanner" :disabled="disabled">
-      📷
-    </button>
-
-    <transition name="fade">
-      <div v-if="isScanning" class="scanner-overlay">
-        <div class="scanner-modal">
-          <div class="scanner-header">
-            <div class="scanner-title">Quét mã QR</div>
-            <button type="button" class="scanner-close" @click="stopScanner">✕</button>
-          </div>
-
-          <div class="scanner-body">
-            <div class="video-wrapper">
-              <video
-                ref="videoRef"
-                class="scanner-video"
-                autoplay
-                muted
-                playsinline
-              ></video>
-            </div>
-
-            <div class="scanner-status">
-              {{ status }}
-            </div>
-
-            <div v-if="errorMsg" class="scanner-error">
-              {{ errorMsg }}
-            </div>
-          </div>
-
-          <div class="scanner-footer">
-            <button type="button" class="btn-secondary" @click="stopScanner">
-              Tắt camera
-            </button>
-          </div>
-        </div>
-      </div>
-    </transition>
-  </div>
-</template>
-
 <script setup>
 import { ref, nextTick, onBeforeUnmount } from 'vue'
 import jsQR from 'jsqr'
@@ -154,98 +109,97 @@ defineExpose({
 })
 </script>
 
-<style scoped>
-.scan-btn {
-  padding: 10px 18px;
-  background: #86c06b;
-  color: #14532d;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  font-weight: 600;
-}
+<template>
+  <div>
 
-.scan-btn:hover {
-  background: #6fb457;
-}
+    <!-- Scan Button -->
+    <button
+      type="button"
+      @click="startScanner"
+      :disabled="disabled"
+      class="px-[18px] py-[10px] rounded-[10px] font-semibold
+             bg-[#86c06b] text-[#14532d]
+             hover:bg-[#6fb457]
+             disabled:opacity-60 disabled:cursor-not-allowed"
+    >
+      📷
+    </button>
 
-.scan-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+    <!-- Scanner -->
+    <transition
+      enter-active-class="transition-opacity duration-200"
+      leave-active-class="transition-opacity duration-200"
+      enter-from-class="opacity-0"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="isScanning"
+        class="fixed inset-0 bg-black/60 flex justify-center items-center z-[9999]"
+      >
 
-/* Overlay */
-.scanner-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
+        <!-- Modal -->
+        <div
+          class="w-[340px] max-w-[90%] bg-white rounded-[16px] p-4
+                 shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
+        >
 
-/* Modal */
-.scanner-modal {
-  width: 340px;
-  max-width: 90%;
-  background: white;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-}
+          <!-- Header -->
+          <div class="flex justify-between items-center mb-3">
 
-.scanner-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
+            <div class="font-semibold text-[#14532d]">
+              Quét mã QR
+            </div>
 
-.scanner-title {
-  font-weight: 600;
-  color: #14532d;
-}
+            <button
+              type="button"
+              @click="stopScanner"
+              class="w-[28px] h-[28px] rounded-full bg-red-500 text-white"
+            >
+              ✕
+            </button>
 
-.scanner-close {
-  background: #ef4444;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-  cursor: pointer;
-}
+          </div>
 
-.video-wrapper {
-  position: relative;
-}
+          <!-- Body -->
+          <div>
 
-.scanner-video {
-  width: 100%;
-  border-radius: 12px;
-}
+            <div class="relative">
+              <video
+                ref="videoRef"
+                class="w-full rounded-[12px]"
+                autoplay
+                muted
+                playsinline
+              ></video>
+            </div>
 
-.scanner-status {
-  margin-top: 10px;
-  font-size: 14px;
-  color: #4b5563;
-}
+            <div class="mt-[10px] text-[14px] text-gray-600">
+              {{ status }}
+            </div>
 
-.scanner-error {
-  margin-top: 8px;
-  color: #dc2626;
-  font-size: 13px;
-}
+            <div
+              v-if="errorMsg"
+              class="mt-[8px] text-[13px] text-red-600"
+            >
+              {{ errorMsg }}
+            </div>
 
-.btn-secondary {
-  margin-top: 12px;
-  width: 100%;
-  padding: 8px;
-  background: #4b5563;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-</style>
+          </div>
+
+          <!-- Footer -->
+          <button
+            type="button"
+            @click="stopScanner"
+            class="mt-[12px] w-full py-[8px] rounded-[8px]
+                   bg-gray-600 text-white hover:bg-gray-700"
+          >
+            Tắt camera
+          </button>
+
+        </div>
+
+      </div>
+    </transition>
+
+  </div>
+</template>
