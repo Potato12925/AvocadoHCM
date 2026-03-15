@@ -19,7 +19,7 @@
         type="text"
         id="orderCode"
         placeholder="Để trống để tự sinh"
-        :ref="orderCodeRef"
+        ref="orderCodeInputRef"
         @input="emitOrderCodeChange"
         @keyup.enter="emitOrderCodeEnter"
         @focus="emitOrderCodeFocus"
@@ -94,29 +94,30 @@ const props = defineProps({
   customerName: String,
   orderCode: String,
   packageDate: String,
-  showPackageDatePicker: Boolean,
-  packageDateMode: String,
-  autoScanOrderCode: Boolean,
   isExternalOrder: Boolean,
-  orderCodeRef: Object,
+  orderHistory: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
   'update:customerName',
   'update:orderCode',
   'update:packageDate',
-  'orderCodeEnter',
-  'orderCodeFocus',
-  'toggleAutoScan',
-  'toggleExternalOrder',
-  'setPackageDateNow',
-  'togglePackageDatePicker',
+  'update:isExternalOrder',
+  'focusBarcode',
+  'orderCodeDuplicate',
 ]);
 
 const localCustomerName = ref(props.customerName || '');
 const localOrderCode = ref(props.orderCode || '');
 const localPackageDate = ref(props.packageDate || '');
 const qrScannerRef = ref(null);
+const orderCodeInputRef = ref(null);
+const showPackageDatePicker = ref(false);
+const packageDateMode = ref('now');
+const autoScanOrderCode = ref(false);
 
 watch(() => props.customerName, (newVal) => {
   localCustomerName.value = newVal || '';
@@ -130,16 +131,19 @@ watch(() => props.packageDate, (newVal) => {
   localPackageDate.value = newVal || '';
 });
 
-watch(() => props.autoScanOrderCode, (enabled) => {
-  const inputEl = props.orderCodeRef?.value;
-  if (enabled && inputEl && document.activeElement === inputEl && !props.isExternalOrder) {
-    qrScannerRef.value?.startScanner?.();
+watch(() => props.isExternalOrder, (external) => {
+  if (external) {
+    autoScanOrderCode.value = false;
+    localOrderCode.value = '';
+    emit('update:orderCode', '');
+    qrScannerRef.value?.stopScanner?.();
   }
 });
 
-watch(() => props.isExternalOrder, (external) => {
-  if (external) {
-    qrScannerRef.value?.stopScanner?.();
+watch(autoScanOrderCode, (enabled) => {
+  const inputEl = orderCodeInputRef.value;
+  if (enabled && inputEl && document.activeElement === inputEl && !props.isExternalOrder) {
+    qrScannerRef.value?.startScanner?.();
   }
 });
 
@@ -157,36 +161,81 @@ const emitPackageDateChange = () => {
 
 const emitOrderCodeEnter = () => {
   emitOrderCodeChange();
-  emit('orderCodeEnter');
+  handleOrderCodeEnter();
 };
 
 const emitOrderCodeFocus = () => {
-  emit('orderCodeFocus');
-  if (props.autoScanOrderCode && !props.isExternalOrder) {
+  if (autoScanOrderCode.value && !props.isExternalOrder) {
     qrScannerRef.value?.startScanner?.();
   }
 };
 
 const emitToggleAutoScan = () => {
-  emit('toggleAutoScan');
+  autoScanOrderCode.value = !autoScanOrderCode.value;
 };
 
 const emitToggleExternalOrder = () => {
-  emit('toggleExternalOrder');
+  emit('update:isExternalOrder', !props.isExternalOrder);
 };
 
 const emitSetPackageDateNow = () => {
-  emit('setPackageDateNow');
+  localPackageDate.value = getLocalDateTimeString();
+  packageDateMode.value = 'now';
+  showPackageDatePicker.value = false;
+  emitPackageDateChange();
 };
 
 const emitTogglePackageDatePicker = () => {
-  emit('togglePackageDatePicker');
+  showPackageDatePicker.value = !showPackageDatePicker.value;
+  if (showPackageDatePicker.value) {
+    packageDateMode.value = 'custom';
+  }
 };
 
 const handleScannerScanned = () => {
   emitOrderCodeChange();
-  emit('orderCodeEnter');
+  handleOrderCodeEnter();
 };
+
+function handleOrderCodeEnter() {
+  const code = String(localOrderCode.value || '').trim();
+  if (!code) return;
+
+  const exists = (props.orderHistory || []).some(
+    (order) => String(order?.order_code || '').trim().toLowerCase() === code.toLowerCase(),
+  );
+
+  if (exists) {
+    localOrderCode.value = '';
+    emit('update:orderCode', '');
+    emit('orderCodeDuplicate', 'Mã vận đơn đã tồn tại');
+    return;
+  }
+
+  emit('focusBarcode');
+}
+
+function focusOrderCode() {
+  orderCodeInputRef.value?.focus();
+}
+
+function resetHeaderState() {
+  autoScanOrderCode.value = false;
+  showPackageDatePicker.value = false;
+  packageDateMode.value = 'now';
+  qrScannerRef.value?.stopScanner?.();
+}
+
+function getLocalDateTimeString(date = new Date()) {
+  const tzOffset = date.getTimezoneOffset() * 60000;
+  const localISO = new Date(date.getTime() - tzOffset).toISOString();
+  return localISO.slice(0, 16);
+}
+
+defineExpose({
+  focusOrderCode,
+  resetHeaderState,
+});
 </script>
 
 <style scoped>

@@ -14,23 +14,18 @@
         >
           <div class="form-row">
             <OrderFormHeader
+              ref="orderFormHeaderRef"
               :customer-name="orderForm.customer_name"
               :order-code="orderForm.order_code"
               :package-date="orderForm.package_date"
-              :show-package-date-picker="showPackageDatePicker"
-              :package-date-mode="packageDateMode"
-              :auto-scan-order-code="autoScanOrderCode"
               :is-external-order="isExternalOrder"
-              :order-code-ref="orderCodeRef"
+              :order-history="orderHistory"
               @update:customer-name="orderForm.customer_name = $event"
               @update:order-code="orderForm.order_code = $event"
               @update:package-date="(val) => { orderForm.package_date = val; packageDateTouched = true; }"
-              @order-code-enter="handleOrderCodeEnter"
-              @order-code-focus="handleOrderCodeFocus"
-              @toggle-auto-scan="toggleOrderCodeAutoScan"
-              @toggle-external-order="toggleExternalOrder"
-              @set-package-date-now="setPackageDateNow"
-              @toggle-package-date-picker="togglePackageDatePicker"
+              @update:is-external-order="updateExternalOrder"
+              @focus-barcode="focusProductBarcode"
+              @order-code-duplicate="showMessage($event, 'error')"
             />
           </div>
 
@@ -110,10 +105,8 @@ const orderForm = ref({
 });
 
 const packageDateTouched = ref(false);
-const showPackageDatePicker = ref(false);
-const packageDateMode = ref('now');
 const barcodeInput = ref('');
-const orderCodeRef = ref(null);
+const orderFormHeaderRef = ref(null);
 const productCartRef = ref(null);
 const cartItems = ref([]);
 const imports = ref([]);
@@ -125,7 +118,6 @@ const historyLoading = ref(false);
 const expandedOrders = ref(new Set());
 const returningOrders = ref(new Set());
 const returnedOrders = ref(new Set());
-const autoScanOrderCode = ref(false);
 const isExternalOrder = ref(false);
 
 /**
@@ -431,46 +423,16 @@ function addProductByBarcode() {
   barcodeInput.value = '';
 }
 
-function handleOrderCodeEnter() {
-  const code = (orderForm.value.order_code || '').trim();
-  if (!code) return;
-
-  const exists = (orderHistory.value || []).some(
-    (o) => String(o.order_code || '').toLowerCase() === code.toLowerCase(),
-  );
-  if (exists) {
-    showMessage('Mã vận đơn đã tồn tại', 'error');
-    orderForm.value.order_code = "";
-    return;
-  }
-  focusProductBarcode();
-}
-
 function focusProductBarcode() {
   productCartRef.value?.focusBarcodeInput?.();
 }
 
 function focusOrderCode() {
-  if (orderCodeRef.value) {
-    orderCodeRef.value.focus();
-  }
+  orderFormHeaderRef.value?.focusOrderCode?.();
 }
 
-function handleOrderCodeFocus() {
-  if (!autoScanOrderCode.value) return;
-}
-
-function toggleOrderCodeAutoScan() {
-  autoScanOrderCode.value = !autoScanOrderCode.value;
-}
-
-function toggleExternalOrder() {
-  isExternalOrder.value = !isExternalOrder.value;
-  if (isExternalOrder.value) {
-    // Tắt quét tự động khi bật chế độ đơn ngoài
-    autoScanOrderCode.value = false;
-    orderForm.value.order_code = '';
-  }
+function updateExternalOrder(value) {
+  isExternalOrder.value = value;
 }
 
 async function handleCtrlEnter() {
@@ -514,20 +476,6 @@ function removeItem(idx) {
 function clearCart() {
   if (confirm('Bạn chắc chắn muốn xóa hết sản phẩm?')) {
     cartItems.value = [];
-  }
-}
-
-function setPackageDateNow() {
-  orderForm.value.package_date = getLocalDateTimeString();
-  packageDateTouched.value = true;
-  packageDateMode.value = 'now';
-  showPackageDatePicker.value = false;
-}
-
-function togglePackageDatePicker() {
-  showPackageDatePicker.value = !showPackageDatePicker.value;
-  if (showPackageDatePicker.value) {
-    packageDateMode.value = 'custom';
   }
 }
 
@@ -608,11 +556,10 @@ async function submitOrder() {
       package_date: getLocalDateTimeString(),
     };
     packageDateTouched.value = false;
-    showPackageDatePicker.value = false;
-    packageDateMode.value = 'now';
     barcodeInput.value = '';
     cartItems.value = [];
     isExternalOrder.value = false;
+    orderFormHeaderRef.value?.resetHeaderState?.();
 
 
     await loadOrderHistory();
