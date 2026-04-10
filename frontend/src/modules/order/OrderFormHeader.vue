@@ -230,13 +230,14 @@ function handleOrderCodeEnter() {
 
 function focusOrderCode() {
   orderCodeInputRef.value?.focus();
+  if ( autoScanOrderCode.value === true){
+    QRScanner.value?.startScanner?.();
+  }
 }
 
-function resetHeaderState() {
-  autoScanOrderCode.value = false;
+function resetHeaderDate() {
   showPackageDatePicker.value = false;
   packageDateMode.value = 'now';
-  qrScannerRef.value?.stopScanner?.();
 }
 
 function getLocalDateTimeString(date = new Date()) {
@@ -247,7 +248,7 @@ function getLocalDateTimeString(date = new Date()) {
 
 defineExpose({
   focusOrderCode,
-  resetHeaderState,
+  resetHeaderDate,
 });
 </script>
 

@@ -9,7 +9,7 @@
         <form
           @submit.prevent="submitOrder"
           @keydown.enter.prevent
-          @keydown.ctrl.enter.prevent="handleCtrlEnter"
+          @keydown.ctrl.enter.prevent="submitOrder"
           class="order-form"
         >
           <div class="form-row">
@@ -31,15 +31,11 @@
 
           <ProductCart
             ref="productCartRef"
-            v-model:barcode-input="barcodeInput"
+            v-model:cart-items="cartItems"
             :cart-items="cartItems"
+            :imports="imports"
             :is-loading="loading"
-            @add-product-by-barcode="addProductByBarcode"
-            @decrease-qty="decreaseQty"
-            @increase-qty="increaseQty"
-            @qty-change="refreshAllocationsForIndex"
-            @remove-item="removeItem"
-            @clear-cart="clearCart"
+            @notify="showMessage"
             @submit="submitOrder"
           />
         </form>
@@ -105,7 +101,6 @@ const orderForm = ref({
 });
 
 const packageDateTouched = ref(false);
-const barcodeInput = ref('');
 const orderFormHeaderRef = ref(null);
 const productCartRef = ref(null);
 const cartItems = ref([]);
@@ -166,15 +161,6 @@ function applyLocalImportUpdates(updates = []) {
 
   imports.value = next;
 }
-
-function itemTotalCost(item) {
-  if (!item || !Array.isArray(item.allocations)) return 0;
-  return item.allocations.reduce((s, a) => s + (a.qty || 0) * (a.unit_cost || 0), 0);
-}
-
-const totalCost = computed(() => {
-  return cartItems.value.reduce((sum, item) => sum + itemTotalCost(item), 0);
-});
 
 async function loadImports() {
   try {
@@ -263,164 +249,12 @@ function toggleOrderDetails(orderCode) {
   expandedOrders.value = next;
 }
 
-function isOrderExpanded(orderCode) {
-  return expandedOrders.value.has(orderCode);
-}
-
 function isReturning(orderCode) {
   return returningOrders.value.has(orderCode);
 }
 
 function isReturned(orderCode) {
   return returnedOrders.value.has(orderCode);
-}
-
-function parseImportDate(value) {
-  if (value === null || value === undefined) return Number.POSITIVE_INFINITY;
-  const raw = String(value).trim();
-  if (!raw) return Number.POSITIVE_INFINITY;
-
-  // Prefer parsing dd/mm/yyyy (and optional time) to avoid US month/day swap.
-  const dmyMatch = raw.match(
-    /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
-  );
-  if (dmyMatch) {
-    const day = parseInt(dmyMatch[1], 10);
-    const month = parseInt(dmyMatch[2], 10) - 1;
-    const year = parseInt(
-      dmyMatch[3].length === 2 ? `20${dmyMatch[3]}` : dmyMatch[3],
-      10,
-    );
-    const hour = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0;
-    const minute = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0;
-    const second = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0;
-    const dt = new Date(year, month, day, hour, minute, second);
-    if (!Number.isNaN(dt.getTime())) return dt.getTime();
-  }
-
-  const direct = Date.parse(raw);
-  if (!Number.isNaN(direct)) return direct;
-
-  return Number.POSITIVE_INFINITY;
-}
-
-function normalizeBarcode(value) {
-  if (value === null || value === undefined) return '';
-  const trimmed = String(value).trim();
-  if (!trimmed) return '';
-  return trimmed.replace(/\.0+$/, '');
-}
-
-function getBatchesForBarcode(barcode) {
-  const target = normalizeBarcode(barcode);
-  if (!target) return [];
-  const batches = [];
-  for (const row of imports.value || []) {
-    const rowBarcode = normalizeBarcode(row?.[1]);
-    if (!rowBarcode || rowBarcode !== target) continue;
-    const available = parseInt(row?.[11]) || 0;
-    const unitCost = Number(row?.[6]) || 0;
-    const productID = row?.[0];
-    const importDate = parseImportDate(row?.[8]);
-    batches.push({ row, productID, unitCost, available, importDate });
-  }
-  // Sort by import date asc (oldest first). Invalid dates are pushed to the end.
-  batches.sort((a, b) => {
-    if (a.importDate === b.importDate) return 0;
-    if (a.importDate === Number.POSITIVE_INFINITY) return 1;
-    if (b.importDate === Number.POSITIVE_INFINITY) return -1;
-    return a.importDate - b.importDate;
-  });
-  console.log(
-    'Sorted batches for barcode',
-    barcode,
-    batches.map((b) => ({
-      productID: b.productID,
-      rawDate: b?.row?.[8],
-      parsedDate: b.importDate,
-      available: b.available,
-      unitCost: b.unitCost,
-    })),
-  );
-  return batches;
-}
-
-function computeAllocations(barcode, desiredQty) {
-  const batches = getBatchesForBarcode(barcode);
-  const totalAvailable = batches.reduce((s, b) => s + Math.max(0, b.available), 0);
-  const target = Math.max(0, Math.min(desiredQty, totalAvailable));
-  let remaining = target;
-  const allocations = [];
-  for (const b of batches) {
-    if (remaining <= 0) break;
-    const take = Math.min(b.available, remaining);
-    if (take > 0) {
-      allocations.push({ productID: b.productID, unit_cost: b.unitCost, qty: take });
-      remaining -= take;
-    }
-  }
-  return { allocations, totalAvailable, finalQty: target };
-}
-
-function addProductByBarcode() {
-  if (!barcodeInput.value.trim()) return;
-
-  const barcode = normalizeBarcode(barcodeInput.value);
-  const batches = getBatchesForBarcode(barcode);
-  console.log('batches:', batches);
-  if (batches.length === 0) {
-    showMessage('Không tìm thấy sản phẩm với mã barcode này', 'error');
-    barcodeInput.value = '';
-    return;
-  }
-
-  const totalAvailable = batches.reduce((s, b) => s + Math.max(0, b.available), 0);
-  if (totalAvailable <= 0) {
-    showMessage('Sản phẩm đã hết hàng', 'error');
-    barcodeInput.value = '';
-    return;
-  }
-
-  const existingIdx = cartItems.value.findIndex(
-    (ci) => normalizeBarcode(ci.barcode) === barcode,
-  );
-  if (existingIdx === -1) {
-    const top = batches[0];
-    console.log('Selected batch for new item', {
-      productID: top?.productID,
-      rawDate: top?.row?.[8],
-      parsedDate: top?.importDate,
-    });
-    const brand = top?.row?.[2] || '';
-    const name = top?.row?.[3] || '';
-    const category = top?.row?.[4] || '';
-    // Start with qty 1
-    const { allocations, totalAvailable: avail, finalQty } = computeAllocations(barcode, 1);
-    console.log('Allocations for new item', allocations);
-    cartItems.value.push({
-      barcode,
-      brand,
-      name,
-      category,
-      qty_sold: finalQty,
-      available_total: avail,
-      allocations,
-    });
-  } else {
-    const current = cartItems.value[existingIdx];
-    const desired = Math.min((current.qty_sold || 0) + 1, totalAvailable);
-    const { allocations, totalAvailable: avail, finalQty } = computeAllocations(barcode, desired);
-    current.qty_sold = finalQty;
-    current.available_total = avail;
-    current.allocations = allocations;
-    console.log('Updated allocations for existing item', {
-      barcode,
-      qty: finalQty,
-      allocations,
-    });
-  }
-
-  barcodeInput.value = '';
 }
 
 function focusProductBarcode() {
@@ -435,48 +269,15 @@ function updateExternalOrder(value) {
   isExternalOrder.value = value;
 }
 
-async function handleCtrlEnter() {
-  await submitOrder();
-  await nextTick();
-  focusOrderCode();
-}
-
-function refreshAllocationsForIndex(idx) {
-  const item = cartItems.value[idx];
-  if (!item) return;
-  const desired = Math.max(1, Number(item.qty_sold || 1));
-  const { allocations, totalAvailable, finalQty } = computeAllocations(item.barcode, desired);
-  item.available_total = totalAvailable;
-  item.qty_sold = finalQty;
-  item.allocations = allocations;
-}
-
-function increaseQty(idx) {
-  const item = cartItems.value[idx];
-  if (!item) return;
-  if ((item.qty_sold || 0) < (item.available_total || 0)) {
-    item.qty_sold = (item.qty_sold || 0) + 1;
-    refreshAllocationsForIndex(idx);
-  }
-}
-
-function decreaseQty(idx) {
-  const item = cartItems.value[idx];
-  if (!item) return;
-  if ((item.qty_sold || 0) > 1) {
-    item.qty_sold = (item.qty_sold || 0) - 1;
-    refreshAllocationsForIndex(idx);
-  }
-}
-
-function removeItem(idx) {
-  cartItems.value.splice(idx, 1);
-}
-
-function clearCart() {
-  if (confirm('Bạn chắc chắn muốn xóa hết sản phẩm?')) {
-    cartItems.value = [];
-  }
+function getCartTotalCost(items = []) {
+  return items.reduce((sum, item) => {
+    const itemCost = Array.isArray(item?.allocations)
+      ? item.allocations.reduce((acc, allocation) => {
+        return acc + (allocation.qty || 0) * (allocation.unit_cost || 0);
+      }, 0)
+      : 0;
+    return sum + itemCost;
+  }, 0);
 }
 
 async function submitOrder() {
@@ -507,7 +308,7 @@ async function submitOrder() {
       customer_name: orderForm.value.customer_name,
       order_code: orderCode,
       package_date: orderForm.value.package_date,
-      total_cost: totalCost.value,
+      total_cost: getCartTotalCost(cartItems.value),
       note: '',
     });
 
@@ -554,13 +355,15 @@ async function submitOrder() {
       package_date: getLocalDateTimeString(),
     };
     packageDateTouched.value = false;
-    barcodeInput.value = '';
     cartItems.value = [];
     isExternalOrder.value = false;
-    orderFormHeaderRef.value?.resetHeaderState?.();
+    orderFormHeaderRef.value?.resetHeaderDate?.();
 
 
     await loadOrderHistory();
+
+    focusOrderCode();
+    await nextTick();
   } catch (error) {
     showMessage('Lỗi: ' + error.message, 'error');
   } finally {
@@ -752,10 +555,6 @@ async function handleReturnOrder(orderCodes) {
       markReturned(code);
     }
   }
-}
-
-function formatNumber(num) {
-  return typeof num === 'number' ? num.toLocaleString('vi-VN') : num;
 }
 
 onMounted(() => {

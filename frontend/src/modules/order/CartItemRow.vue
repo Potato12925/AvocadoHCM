@@ -100,7 +100,10 @@ const emitIncreaseQty = () => {
 };
 
 const emitQtyChange = () => {
-  emit('qtyChange', props.index);
+  emit('qtyChange', {
+    index: props.index,
+    qty: Number(localQtySold.value) || 0,
+  });
 };
 
 const emitRemove = () => {
