@@ -1,7 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import importlib
 import pkgutil
 import os
@@ -22,6 +22,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Auth Middleware ---
+PROTECTED_PREFIXES = ('/products', '/imports', '/orders', '/sold', '/expenses', '/externals')
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith(PROTECTED_PREFIXES):
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        token = request.cookies.get("avocado_auth_token")
+        if token != "authenticated_user_abc":
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Unauthorized. Please login at /auth/login."}
+            )
+    return await call_next(request)
 
 # --- Tự động load toàn bộ router trong thư mục app/routes ---
 def register_all_routers(app: FastAPI):
@@ -57,7 +74,7 @@ def health_check():
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
     # Don't serve SPA for API endpoints
-    if full_path.startswith(('products/', 'imports/', 'orders/', 'sold/', 'expenses/', 'externals/', 'health/')):
+    if full_path.startswith(('products/', 'imports/', 'orders/', 'sold/', 'expenses/', 'externals/', 'health/', 'auth/')):
         return {"error": "Not found"}
 
     index_path = os.path.join(frontend_dist_path, 'index.html')
