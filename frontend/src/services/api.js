@@ -6,18 +6,65 @@ const API_BASE_URL = (() => {
   }
   // In production, use relative path to same domain
   return '';
-})();
+})();// ============= FETCH WRAPPER =============
+async function fetchWrapper(url, options = {}) {
+  options.credentials = 'include';
+  const response = await fetch(url, options);
+  
+  if (response.status === 401) {
+    localStorage.removeItem('isAuthenticated');
+    if (window.location.pathname !== '/login') {
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+    }
+    throw new Error('Unauthorized');
+  }
+  return response;
+}
+
+// ============= AUTH API =============
+export const authAPI = {
+  async login(password) {
+    const response = await fetchWrapper(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!response.ok) {
+      let detail = 'Đăng nhập thất bại';
+      try {
+        const err = await response.json();
+        detail = err?.detail || detail;
+      } catch (_) {}
+      throw new Error(detail);
+    }
+    return response.json();
+  },
+  
+  async logout() {
+    const response = await fetchWrapper(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST'
+    });
+    localStorage.removeItem('isAuthenticated');
+    return response.ok;
+  },
+  
+  async check() {
+    const response = await fetchWrapper(`${API_BASE_URL}/auth/check`);
+    if (!response.ok) return { authenticated: false };
+    return response.json();
+  }
+};
 
 // ============= IMPORTS API =============
 export const importsAPI = {
   async getAll() {
-    const response = await fetch(`${API_BASE_URL}/imports/`);
+    const response = await fetchWrapper(`${API_BASE_URL}/imports/`);
     if (!response.ok) throw new Error('Failed to fetch imports');
     return response.json();
   },
 
   async create(data) {
-    const response = await fetch(`${API_BASE_URL}/imports/`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/imports/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -27,7 +74,7 @@ export const importsAPI = {
   },
 
   async updateRows(updates) {
-    const response = await fetch(`${API_BASE_URL}/imports/rows/update`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/imports/rows/update`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
@@ -37,7 +84,7 @@ export const importsAPI = {
   },
 
   async deleteRows(rows) {
-    const response = await fetch(`${API_BASE_URL}/imports/rows/delete`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/imports/rows/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),
@@ -50,12 +97,12 @@ export const importsAPI = {
 // ============= PRODUCTS API =============
 export const productsAPI = {
   async getAll() {
-    const response = await fetch(`${API_BASE_URL}/products/`);
+    const response = await fetchWrapper(`${API_BASE_URL}/products/`);
     if (!response.ok) throw new Error('Failed to fetch products');
     return response.json();
   },
   async create(data) {
-    const response = await fetch(`${API_BASE_URL}/products/`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/products/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -64,7 +111,7 @@ export const productsAPI = {
     return response.json();
   },
   async updateRows(updates) {
-    const response = await fetch(`${API_BASE_URL}/products/rows/update`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/products/rows/update`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
@@ -73,7 +120,7 @@ export const productsAPI = {
     return response.json();
   },
   async deleteRows(rows) {
-    const response = await fetch(`${API_BASE_URL}/products/rows/delete`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/products/rows/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),
@@ -86,7 +133,7 @@ export const productsAPI = {
 // ============= ORDERS API =============
 export const ordersAPI = {
   async getAll() {
-    const response = await fetch(`${API_BASE_URL}/orders/get`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/orders/get`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -95,7 +142,7 @@ export const ordersAPI = {
   },
 
   async create(data) {
-    const response = await fetch(`${API_BASE_URL}/orders/`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/orders/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -112,7 +159,7 @@ export const ordersAPI = {
   },
 
   async updateRows(updates) {
-    const response = await fetch(`${API_BASE_URL}/orders/rows/update`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/orders/rows/update`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
@@ -122,7 +169,7 @@ export const ordersAPI = {
   },
 
   async deleteRows(rows) {
-    const response = await fetch(`${API_BASE_URL}/orders/rows/delete`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/orders/rows/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),
@@ -135,7 +182,7 @@ export const ordersAPI = {
 // =============EXTERNAL ORDERS API =============
 export const externalOrdersAPI = {
   async getAll() {
-    const response = await fetch(`${API_BASE_URL}/externals/get`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/externals/get`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -144,7 +191,7 @@ export const externalOrdersAPI = {
   },
 
   async create(data) {
-    const response = await fetch(`${API_BASE_URL}/externals/`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/externals/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -161,7 +208,7 @@ export const externalOrdersAPI = {
   },
 
   async updateRows(updates) {
-    const response = await fetch(`${API_BASE_URL}/externals/rows/update`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/externals/rows/update`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
@@ -171,7 +218,7 @@ export const externalOrdersAPI = {
   },
 
   async deleteRows(rows) {
-    const response = await fetch(`${API_BASE_URL}/externals/rows/delete`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/externals/rows/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),
@@ -184,7 +231,7 @@ export const externalOrdersAPI = {
 // ============= SOLD API =============
 export const soldAPI = {
   async getAll() {
-    const response = await fetch(`${API_BASE_URL}/sold/get`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/sold/get`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -193,7 +240,7 @@ export const soldAPI = {
   },
 
   async create(data) {
-    const response = await fetch(`${API_BASE_URL}/sold/`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/sold/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -203,7 +250,7 @@ export const soldAPI = {
   },
 
   async deleteRows(rows) {
-    const response = await fetch(`${API_BASE_URL}/sold/rows/delete`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/sold/rows/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),
@@ -216,13 +263,13 @@ export const soldAPI = {
 // ============= EXPENSES API =============
 export const expensesAPI = {
   async getAll() {
-    const response = await fetch(`${API_BASE_URL}/expenses/`);
+    const response = await fetchWrapper(`${API_BASE_URL}/expenses/`);
     if (!response.ok) throw new Error('Failed to fetch expenses');
     return response.json();
   },
 
   async create(data) {
-    const response = await fetch(`${API_BASE_URL}/expenses/`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/expenses/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -232,7 +279,7 @@ export const expensesAPI = {
   },
 
   async updateRows(updates) {
-    const response = await fetch(`${API_BASE_URL}/expenses/rows/update`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/expenses/rows/update`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
@@ -242,7 +289,7 @@ export const expensesAPI = {
   },
 
   async deleteRows(rows) {
-    const response = await fetch(`${API_BASE_URL}/expenses/rows/delete`, {
+    const response = await fetchWrapper(`${API_BASE_URL}/expenses/rows/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),
